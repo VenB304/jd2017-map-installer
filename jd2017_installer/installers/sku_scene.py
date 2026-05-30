@@ -39,6 +39,29 @@ def _is_codename_already_registered(isc_content: str, codename: str) -> bool:
     return bool(re.search(pattern, isc_content, re.IGNORECASE))
 
 
+_BLANK_SKUSCENE_XML = """<?xml version="1.0" encoding="ISO-8859-1"?>
+<root>
+	<Scene ENGINE_VERSION="253653" GRIDUNIT="0.500000" DEPTH_SEPARATOR="0" NEAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" FAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" viewFamily="0">
+		<ACTORS NAME="Actor">
+			<Actor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="skuscene_db" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="world/skuscenes/skuscene_base.tpl">
+				<COMPONENTS NAME="JD_SongDatabaseComponent">
+					<JD_SongDatabaseComponent />
+				</COMPONENTS>
+			</Actor>
+		</ACTORS>
+		<sceneConfigs>
+			<SceneConfigs activeSceneConfig="0">
+				<sceneConfigs NAME="JD_SongDatabaseSceneConfig">
+					<JD_SongDatabaseSceneConfig name="" SKU="{sku}" Territory="NCSA" RatingUI="world/ui/screens/bootsequence/rating">
+						<ENUM NAME="Pause_Level" SEL="6" />
+					</JD_SongDatabaseSceneConfig>
+				</sceneConfigs>
+			</SceneConfigs>
+		</sceneConfigs>
+	</Scene>
+</root>
+"""
+
 def _inject_actor_into_isc(isc_path: Path, codename: str) -> bool:
     """Inject a map Actor entry into a single ISC file.
 
@@ -46,12 +69,16 @@ def _inject_actor_into_isc(isc_path: Path, codename: str) -> bool:
     """
     content = isc_path.read_bytes()
 
-    # ISC.CKD files are binary-wrapped XML. The XML content starts after a short header.
-    # For JD2017 PC patch_pc, the .isc.ckd files are plain XML (not binary-cooked).
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError:
         text = content.decode("latin-1")
+        
+    if "<?xml" not in text:
+        logger.info(f"File {isc_path.name} appears to be binary. Replacing with blank XML SkuScene.")
+        sku = "jd2017-pc-all" if "all" in isc_path.name.lower() else "jd2017-pc-ww"
+        text = _BLANK_SKUSCENE_XML.format(sku=sku)
+        isc_path.write_bytes(text.encode("utf-8"))
 
     if _is_codename_already_registered(text, codename):
         logger.info("Codename '%s' already registered in %s", codename, isc_path.name)
