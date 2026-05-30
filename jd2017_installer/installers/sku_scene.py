@@ -77,10 +77,88 @@ def _inject_actor_into_isc(isc_path: Path, codename: str) -> bool:
 
 
 def list_registered_maps(game_dir: Path) -> list[str]:
-    """Stub to satisfy JD2021 UI imports."""
-    return []
+    """Return map codenames currently registered in patch_pc.ipk SkuScene ISC."""
+    patch_ipk = game_dir / "patch_pc.ipk"
+    if not patch_ipk.exists():
+        return []
+        
+    with tempfile.TemporaryDirectory(prefix="jd17_list_") as tmp:
+        tmp_dir = Path(tmp)
+        try:
+            unpack_ipk_to_folder(patch_ipk, tmp_dir, filter_paths=[_SKU_FILES[0]])
+            isc_path = tmp_dir / _SKU_FILES[0]
+            if not isc_path.exists():
+                return []
+                
+            try:
+                text = isc_path.read_bytes().decode("utf-8")
+            except UnicodeDecodeError:
+                text = isc_path.read_bytes().decode("latin-1")
+                
+            # Find all USERFRIENDLY="..."
+            matches = re.findall(r'USERFRIENDLY="([^"]+)"', text, re.IGNORECASE)
+            
+            # Deduplicate preserving order
+            seen = set()
+            result = []
+            for m in matches:
+                if m.lower() not in seen:
+                    seen.add(m.lower())
+                    result.append(m)
+            return result
+        except Exception as e:
+            logger.error("Failed to list maps from patch_pc.ipk: %s", e)
+            return []
 
-def unregister_map(*args, **kwargs): pass
+
+def unregister_map(game_dir: Path, codename: str) -> None:
+    """Remove a map's Actor entry from patch_pc.ipk SkuScene files."""
+    patch_ipk = game_dir / "patch_pc.ipk"
+    if not patch_ipk.exists():
+        return
+
+    logger.info("Unregistering map '%s' from SkuScenes", codename)
+
+    with tempfile.TemporaryDirectory(prefix="jd17_unpatch_") as tmp:
+        tmp_dir = Path(tmp)
+        extract_dir = tmp_dir / "extracted"
+
+        # 1. Unpack completely
+        unpack_ipk_to_folder(patch_ipk, extract_dir)
+
+        # 2. Remove Actor from both ISC files
+        unregistered_any = False
+        for sku_rel_path in _SKU_FILES:
+            isc_path = extract_dir / sku_rel_path
+            if isc_path.exists():
+                try:
+                    text = isc_path.read_bytes().decode("utf-8")
+                except UnicodeDecodeError:
+                    text = isc_path.read_bytes().decode("latin-1")
+                    
+                # Regex to match the exact actor block for this codename
+                pattern = re.compile(
+                    rf'\t\t<ACTORS NAME="Actor">\s*<Actor[^>]*USERFRIENDLY="{re.escape(codename)}".*?</ACTORS>\r?\n?',
+                    re.DOTALL | re.IGNORECASE
+                )
+                new_text, count = pattern.subn("", text)
+                
+                if count > 0:
+                    isc_path.write_bytes(new_text.encode("utf-8"))
+                    logger.info("Removed Actor '%s' from %s", codename, isc_path.name)
+                    unregistered_any = True
+
+        if not unregistered_any:
+            logger.info("Map '%s' not found in SkuScenes", codename)
+            return
+
+        # 3. Backup and repack
+        backup_path = game_dir / "patch_pc.ipk.bak"
+        if not backup_path.exists():
+            shutil.copy2(patch_ipk, backup_path)
+            
+        pack_folder_to_ipk(extract_dir, patch_ipk)
+        logger.info("SkuScene unpatch complete for '%s'", codename)
 
 def patch_sku_scenes(game_dir: Path | str, codenames: list[str] | str) -> None:
     """Patch the SkuScene files inside patch_pc.ipk to register a new map.

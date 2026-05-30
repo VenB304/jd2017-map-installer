@@ -156,12 +156,13 @@ def pack_folder_to_ipk(source_dir: Path, output_ipk: Path) -> None:
                 output_ipk.name, num_files, output_ipk.stat().st_size)
 
 
-def unpack_ipk_to_folder(ipk_path: Path, output_dir: Path) -> list[str]:
+def unpack_ipk_to_folder(ipk_path: Path, output_dir: Path, filter_paths: list[str] | None = None) -> list[str]:
     """Unpack a UbiArt IPK archive natively into a directory tree.
 
     Args:
         ipk_path: Path to the .ipk archive.
         output_dir: Output directory for extracted files.
+        filter_paths: Optional list of relative file paths to extract. If None, extract all.
 
     Returns:
         List of extracted relative file paths.
@@ -211,16 +212,19 @@ def unpack_ipk_to_folder(ipk_path: Path, output_dir: Path) -> list[str]:
             _crc = f.read(4)
             _flags = f.read(4)
 
+            rel_path = file_path + file_name
+            if filter_paths and rel_path not in filter_paths:
+                continue
+
             entries.append({
-                "name": file_name,
-                "path": file_path,
+                "rel_path": rel_path,
                 "size": size,
                 "data_offset": data_offset,
             })
 
         # Extract files
         for entry in entries:
-            rel_path = entry["path"] + entry["name"]
+            rel_path = entry["rel_path"]
             out_file = output_dir / rel_path
 
             out_file.parent.mkdir(parents=True, exist_ok=True)

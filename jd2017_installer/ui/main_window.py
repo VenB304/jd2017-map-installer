@@ -1167,6 +1167,9 @@ class MainWindow(QMainWindow):
         self._config.game_directory = Path(path)
         self._set_status(f"Game directory: {path}")
         self._save_settings()
+        
+        from jd2017_installer.installers.patch_pc_builder import check_and_create_patch_pc
+        check_and_create_patch_pc(self, self._config.game_directory)
 
     def _on_quality_changed(self, quality: str) -> None:
         self._config.video_quality = quality

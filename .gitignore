@@ -38,3 +38,4 @@ htmlcov/
 temp/
 Things/
 updater_state.json
+installer_settings.json

@@ -61,7 +61,7 @@ class ConfigWidget(QWidget):
         self._dir_line.setReadOnly(True)
         self._dir_line.setPlaceholderText("Select the folder that contains data and engine…")
         self._dir_line.setToolTip(
-            "Choose the JD2017 installation root. It must contain both the data and engine folders."
+            "Choose the JD2017 installation root. It must contain the executable, patch_pc.ip, bundle_pc.ipk, bundlelogic_pc.ipk"
         )
         dir_row.addWidget(self._dir_line)
 
