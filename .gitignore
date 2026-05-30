@@ -28,9 +28,12 @@ tools/
 *.spec
 
 # Settings (user-specific)
-# installer_settings.json
+installer_settings.json
 
 # Coverage
 .coverage
 htmlcov/
 .pytest_cache/
+
+temp/
+Things/
