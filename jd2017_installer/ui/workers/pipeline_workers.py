@@ -1004,6 +1004,12 @@ class InstallMapWorker(QObject):
                 progress_callback=self.progress.emit,
                 jdnext_cover_prompt_callback=self._ask_jdnext_cover_choice,
             )
+            
+            self.status.emit("Rebuilding secure_fat.gf...")
+            from jd2017_installer.installers.secure_fat_maker import generate_secure_fat
+            generate_secure_fat(self._target_dir)
+            self.status.emit("Secure FAT rebuild complete.")
+            
             self.finished.emit(True)
 
         except Exception as e:
@@ -1281,6 +1287,10 @@ class ApplyAndFinishWorker(QObject):
             # 1. Update configs and audio via reprocess_audio
             reprocess_audio(self._map_data, self._target_dir, self._a_offset, self._config)
             
+            self.status.emit("Rebuilding secure_fat.gf...")
+            from jd2017_installer.installers.secure_fat_maker import generate_secure_fat
+            generate_secure_fat(self._config.game_directory)
+            
             self.progress.emit(100)
             self.status.emit("Sync offsets applied successfully.")
             self.finished.emit(True)
@@ -1322,6 +1332,11 @@ class ApplyOffsetsBatchWorker(QObject):
                 self.progress.emit(progress)
                 reprocess_audio(map_data, target_dir, a_offset, self._config)
 
+            self.status.emit("Rebuilding secure_fat.gf...")
+            from jd2017_installer.installers.secure_fat_maker import generate_secure_fat
+            if self._config:
+                generate_secure_fat(self._config.game_directory)
+            
             self.progress.emit(100)
             self.status.emit("Sync offsets applied successfully.")
             self.finished.emit(True)
@@ -1371,6 +1386,11 @@ class ApplyReadjustOffsetsBatchWorker(QObject):
                     config=self._config,
                 )
 
+            self.status.emit("Rebuilding secure_fat.gf...")
+            from jd2017_installer.installers.secure_fat_maker import generate_secure_fat
+            if self._config:
+                generate_secure_fat(self._config.game_directory)
+            
             self.progress.emit(100)
             self.status.emit("Sync offsets applied successfully.")
             self.finished.emit(True)
@@ -2221,6 +2241,16 @@ class UninstallMapsWorker(QObject):
                     failed.append(f"{codename}: {exc}")
                     self.status.emit(f"[{codename}] ERROR: {exc}")
 
+            if changed_lowers:
+                try:
+                    self.status.emit("Rebuilding secure_fat.gf...")
+                    from jd2017_installer.installers.secure_fat_maker import generate_secure_fat
+                    generate_secure_fat(self._game_dir)
+                    self.status.emit("Secure FAT rebuild complete.")
+                except Exception as e:
+                    logger.exception("Failed to rebuild secure_fat.gf: %s", e)
+                    self.error.emit(f"Warning: Failed to rebuild secure FAT: {e}")
+                    
             self.progress.emit(100)
             self.finished.emit(
                 UninstallBatchResult(
@@ -2234,7 +2264,14 @@ class UninstallMapsWorker(QObject):
         except Exception as exc:
             log_exception_for_profile(logger, "UninstallMapsWorker failed", exc)
             self.error.emit(str(exc))
-
+            self.finished.emit(
+                UninstallBatchResult(
+                    selected_count=len(self._selected_codenames),
+                    changed_codenames=[],
+                    failed=[str(exc)],
+                    no_changes=[],
+                )
+            )
 
 def install_map_to_game(
     map_data: NormalizedMapData, 

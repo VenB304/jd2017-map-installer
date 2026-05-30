@@ -67,7 +67,11 @@ def _inject_actor_into_isc(isc_path: Path, codename: str) -> bool:
         insert_marker = "<sceneConfigs>"
 
     if insert_marker not in text:
-        raise ValueError(f"Could not find <sceneConfigs> insertion point in {isc_path.name}")
+        # Fallback 2: try before </Scene>
+        insert_marker = "</Scene>"
+
+    if insert_marker not in text:
+        raise ValueError(f"Could not find <sceneConfigs> or </Scene> insertion point in {isc_path.name}")
 
     new_text = text.replace(insert_marker, f"{actor_block}\n{insert_marker}", 1)
 
@@ -110,6 +114,10 @@ def list_registered_maps(game_dir: Path) -> list[str]:
             logger.error("Failed to list maps from patch_pc.ipk: %s", e)
             return []
 
+def is_registered(game_dir: Path, codename: str) -> bool:
+    """Check if a specific map is registered in patch_pc.ipk."""
+    registered = [m.lower() for m in list_registered_maps(game_dir)]
+    return codename.lower() in registered
 
 def unregister_map(game_dir: Path, codename: str) -> None:
     """Remove a map's Actor entry from patch_pc.ipk SkuScene files."""

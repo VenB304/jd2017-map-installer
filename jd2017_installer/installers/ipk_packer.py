@@ -213,8 +213,11 @@ def unpack_ipk_to_folder(ipk_path: Path, output_dir: Path, filter_paths: list[st
             _flags = f.read(4)
 
             rel_path = file_path + file_name
-            if filter_paths and rel_path not in filter_paths:
-                continue
+            if filter_paths:
+                normalized_rel = rel_path.lower().replace("\\", "/")
+                normalized_filters = {p.lower().replace("\\", "/") for p in filter_paths}
+                if normalized_rel not in normalized_filters:
+                    continue
 
             entries.append({
                 "rel_path": rel_path,

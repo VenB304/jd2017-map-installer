@@ -100,70 +100,35 @@ def _create_patch_pc_with_merge(game_dir: Path, patch_ipk: Path, bundle_files: l
         tmp_dir = Path(tmp)
         unpack_ipk_to_folder(bundle_pc, tmp_dir, filter_paths=_SKU_FILES)
         
-        # Now extract SkuScenes from all bundle files into a separate location to parse
-        bundles_dir = tmp_dir / "_bundles"
+        # Verify something was extracted
+        has_skus = False
+        for sku in _SKU_FILES:
+            if (tmp_dir / sku).exists():
+                has_skus = True
+                
+        if not has_skus:
+            logger.error("Failed to extract any SkuScene from bundle_pc.ipk")
+            return
+
+        from jd2017_installer.extractors.archive_ipk import inspect_ipk
+        from jd2017_installer.installers.sku_scene import _inject_actor_into_isc
+        
+        # Find all codenames from all bundle files
+        all_codenames = set()
         for b in bundle_files:
-            unpack_ipk_to_folder(b, bundles_dir, filter_paths=_SKU_FILES)
-            
-        # Merge logic
+            try:
+                codenames = inspect_ipk(b)
+                for c in codenames:
+                    all_codenames.add(c)
+            except Exception as e:
+                logger.warning(f"Failed to inspect bundle {b.name}: {e}")
+                
+        # Inject each codename into the extracted SkuScenes
         for sku_rel_path in _SKU_FILES:
             base_sku = tmp_dir / sku_rel_path
-            bundle_sku = bundles_dir / sku_rel_path
-            
-            if base_sku.exists() and bundle_sku.exists():
-                _merge_actors(base_sku, bundle_sku)
-            elif bundle_sku.exists():
-                # If base doesn't have it but bundle does, just copy it
-                base_sku.parent.mkdir(parents=True, exist_ok=True)
-                import shutil
-                shutil.copy2(bundle_sku, base_sku)
-
-        # Remove the bundles staging dir before packing
-        import shutil
-        shutil.rmtree(bundles_dir, ignore_errors=True)
+            if base_sku.exists():
+                for codename in all_codenames:
+                    _inject_actor_into_isc(base_sku, codename)
         
         pack_folder_to_ipk(tmp_dir, patch_ipk)
-        logger.info("Successfully created patch_pc.ipk with merged maps.")
-
-def _merge_actors(base_sku: Path, bundle_sku: Path) -> None:
-    try:
-        base_text = base_sku.read_bytes().decode("utf-8")
-    except UnicodeDecodeError:
-        base_text = base_sku.read_bytes().decode("latin-1")
-        
-    try:
-        bundle_text = bundle_sku.read_bytes().decode("utf-8")
-    except UnicodeDecodeError:
-        bundle_text = bundle_sku.read_bytes().decode("latin-1")
-
-    # Extract all actors from bundle_text
-    # We look for <ACTORS NAME="Actor"> ... </ACTORS>
-    actor_pattern = re.compile(r'<ACTORS NAME="Actor">.*?</ACTORS>', re.DOTALL | re.IGNORECASE)
-    bundle_actors = actor_pattern.findall(bundle_text)
-    
-    # Filter out actors that are already in base_text (by checking USERFRIENDLY="")
-    new_actors = []
-    for actor in bundle_actors:
-        # Find codename in actor
-        match = re.search(r'USERFRIENDLY="([^"]+)"', actor)
-        if match:
-            codename = match.group(1)
-            # Check if codename is in base_text
-            if not re.search(rf'USERFRIENDLY="{re.escape(codename)}"', base_text, re.IGNORECASE):
-                new_actors.append(actor)
-                
-    if not new_actors:
-        return
-
-    # Inject new actors into base_text before <sceneConfigs>
-    insert_marker = "\t\t<sceneConfigs>"
-    if insert_marker not in base_text:
-        insert_marker = "<sceneConfigs>"
-        
-    if insert_marker not in base_text:
-        logger.warning("Could not find <sceneConfigs> in base SkuScene for merging.")
-        return
-        
-    actors_str = "\n".join(new_actors)
-    new_base_text = base_text.replace(insert_marker, f"{actors_str}\n{insert_marker}", 1)
-    base_sku.write_bytes(new_base_text.encode("utf-8"))
+        logger.info(f"Successfully created patch_pc.ipk with {len(all_codenames)} merged maps.")
