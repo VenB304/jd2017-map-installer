@@ -118,7 +118,7 @@ class AppConfig(BaseModel):
     )
 
     class Config:
-        env_prefix = "JD2021_"
+        env_prefix = "JD2017_"
         env_file = ".env"
 
 
