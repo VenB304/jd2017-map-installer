@@ -273,7 +273,9 @@ class InstallWorker(QObject):
             from jd2017_installer.installers.texture_encoder import convert_texture_lossless, compile_image_to_tga_ckd
             
             # Process pre-compiled .tga.ckd files
-            for ext_file in extracted_path.glob("*.tga.ckd"):
+            for ext_file in extracted_path.rglob("*.tga.ckd"):
+                if "pictos" in ext_file.parts or "timeline" in ext_file.parts:
+                    continue # Skip timeline/pictos, handled elsewhere
                 try:
                     raw = ext_file.read_bytes()
                     converted = convert_texture_lossless(raw)
@@ -282,14 +284,17 @@ class InstallWorker(QObject):
                     if "albumbbkg" in target_name:
                         target_name = target_name.replace("albumbbkg", "albumbkg")
                     (menuart_dir / target_name).write_bytes(converted)
+                    self._log(logging.DEBUG, f"Copied and converted {ext_file.name} to menuart")
                 except Exception as e:
                     self._log(logging.WARNING, f"Failed to convert menuart {ext_file.name}: {e}")
             
             # Process raw .png and .jpg files (HTML JDU maps)
             for ext in ("*.png", "*.jpg", "*.jpeg"):
-                for ext_file in extracted_path.glob(ext):
+                for ext_file in extracted_path.rglob(ext):
                     if "phone" in ext_file.name.lower():
                         continue # Phones go uncooked, handled below
+                    if "pictos" in ext_file.parts or "timeline" in ext_file.parts:
+                        continue # Skip timeline/pictos
                     try:
                         target_name = f"{ext_file.stem.lower()}{ext_file.suffix.lower()}"
                         if "albumbbkg" in target_name:
@@ -320,11 +325,16 @@ class InstallWorker(QObject):
             if songdesc_path.exists():
                 try:
                     songdesc_bytes = songdesc_path.read_bytes()
-                    # Only replace .tga with .png if we actually copied .png files (we assume HTML source)
-                    if any(menuart_dir.glob("*.png")):
-                        songdesc_bytes = songdesc_bytes.replace(b".tga", b".png").replace(b".TGA", b".png")
-                        songdesc_path.write_bytes(songdesc_bytes)
-                        self._log(logging.INFO, "Patched songdesc.tpl.ckd to use .png MenuArt textures natively.")
+                    # Only replace .tga with .png for files that actually exist as .png
+                    for png_file in menuart_dir.glob("*.png"):
+                        tga_name = png_file.name.replace(".png", ".tga").encode("utf-8")
+                        png_name = png_file.name.encode("utf-8")
+                        songdesc_bytes = songdesc_bytes.replace(tga_name, png_name)
+                        # try uppercase TGA
+                        tga_name_upper = png_file.name.replace(".png", ".TGA").encode("utf-8")
+                        songdesc_bytes = songdesc_bytes.replace(tga_name_upper, png_name)
+                    songdesc_path.write_bytes(songdesc_bytes)
+                    self._log(logging.INFO, "Patched songdesc.tpl.ckd to use .png MenuArt textures natively.")
                 except Exception as e:
                     self._log(logging.WARNING, f"Failed to patch songdesc.tpl.ckd: {e}")
                         
@@ -339,8 +349,10 @@ class InstallWorker(QObject):
                         self._log(logging.WARNING, f"Failed to copy phone image {ext_img.name}: {e}")
                         
             # Phase 1 Fallback: banner_bkg generation
-            banner_dst = menuart_dir / f"{codename.lower()}_banner_bkg.png"
-            if not banner_dst.exists():
+            banner_png = menuart_dir / f"{codename.lower()}_banner_bkg.png"
+            banner_ckd = menuart_dir / f"{codename.lower()}_banner_bkg.tga.ckd"
+            
+            if not banner_png.exists() and not banner_ckd.exists():
                 map_bkg_src = self.extractor.media_context.map_bkg_path if hasattr(self, "extractor") and hasattr(self.extractor, "media_context") else None
                 if not map_bkg_src or not map_bkg_src.exists():
                     for search_dir in (extracted_path, menuart_dir):
@@ -355,32 +367,51 @@ class InstallWorker(QObject):
                                     break
                             if map_bkg_src and map_bkg_src.exists():
                                 break
+                                
+                generated = False
                 if map_bkg_src and map_bkg_src.exists():
-                    try:
-                        from PIL import Image, ImageChops, ImageOps
-                        bg_img = Image.open(map_bkg_src).convert("RGBA")
-                        bg_w, bg_h = bg_img.size
-                        scale = max(2048 / bg_w, 1024 / bg_h)
-                        new_w, new_h = int(bg_w * scale), int(bg_h * scale)
-                        bg_img = bg_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-                        offset_x = (new_w - 2048) // 2
-                        offset_y = (new_h - 1024) // 2
-                        bg_img = bg_img.crop((offset_x, offset_y, offset_x + 2048, offset_y + 1024))
-                        greyscale = ImageOps.grayscale(bg_img).convert("RGBA")
-                        blue_layer = Image.new("RGBA", (2048, 1024), (0, 0, 255, 255))
-                        result = ImageChops.difference(greyscale, blue_layer)
-                        result.save(banner_dst, "PNG")
-                        self._log(logging.INFO, f"Generated banner_bkg natively as PNG for '{codename}'")
-                    except Exception as e:
-                        self._log(logging.WARNING, f"Failed to generate banner_bkg for '{codename}': {e}")
+                    if map_bkg_src.name.endswith(".tga.ckd"):
+                        # If the source is a CKD, we cannot use PIL, so we just duplicate it
+                        shutil.copy2(map_bkg_src, banner_ckd)
+                        self._log(logging.INFO, f"Used {map_bkg_src.name} as duplicate for banner_bkg (CKD)")
+                        generated = True
+                    else:
+                        try:
+                            from PIL import Image, ImageChops, ImageOps
+                            bg_img = Image.open(map_bkg_src).convert("RGBA")
+                            bg_w, bg_h = bg_img.size
+                            scale = max(2048 / bg_w, 1024 / bg_h)
+                            new_w, new_h = int(bg_w * scale), int(bg_h * scale)
+                            bg_img = bg_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                            offset_x = (new_w - 2048) // 2
+                            offset_y = (new_h - 1024) // 2
+                            bg_img = bg_img.crop((offset_x, offset_y, offset_x + 2048, offset_y + 1024))
+                            greyscale = ImageOps.grayscale(bg_img).convert("RGBA")
+                            blue_layer = Image.new("RGBA", (2048, 1024), (0, 0, 255, 255))
+                            result = ImageChops.difference(greyscale, blue_layer)
+                            result.save(banner_png, "PNG")
+                            self._log(logging.INFO, f"Generated banner_bkg natively as PNG for '{codename}'")
+                            generated = True
+                        except Exception as e:
+                            self._log(logging.WARNING, f"Failed to generate banner_bkg for '{codename}': {e}")
                 
                 # Ultimate fallback: just duplicate a background texture to prevent engine crash
-                if not banner_dst.exists():
+                if not generated:
                     for fallback_name in (f"{codename.lower()}_map_bkg.png", f"{codename.lower()}_cover_albumbkg.png", f"{codename.lower()}_cover_generic.png"):
                         fallback_src = menuart_dir / fallback_name
                         if fallback_src.exists():
-                            shutil.copy2(fallback_src, banner_dst)
-                            self._log(logging.INFO, f"Used {fallback_name} as fallback for banner_bkg to prevent crash.")
+                            shutil.copy2(fallback_src, banner_png)
+                            self._log(logging.INFO, f"Used {fallback_name} as fallback for banner_bkg.png")
+                            generated = True
+                            break
+                            
+                if not generated:
+                    for fallback_name in (f"{codename.lower()}_map_bkg.tga.ckd", f"{codename.lower()}_cover_albumbkg.tga.ckd", f"{codename.lower()}_cover_generic.tga.ckd"):
+                        fallback_src = menuart_dir / fallback_name
+                        if fallback_src.exists():
+                            shutil.copy2(fallback_src, banner_ckd)
+                            self._log(logging.INFO, f"Used {fallback_name} as fallback for banner_bkg.tga.ckd")
+                            generated = True
                             break
                 
             # 3. Modify dtape `.png` to `.tga`

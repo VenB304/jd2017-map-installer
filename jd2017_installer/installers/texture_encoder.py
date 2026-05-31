@@ -46,7 +46,7 @@ def strip_ckd_header(ckd_bytes: bytes) -> tuple[bytes, str]:
     """Strip the 44-byte CKD header and detect the format payload.
 
     Returns:
-        (payload_bytes, format_string) where format is 'dds', 'xtx', or 'raw'.
+        (payload_bytes, format_string) where format is 'dds', 'xtx', 'gtx', 'gtf' or 'raw'.
     """
     if len(ckd_bytes) < 44:
         raise TextureEncodingError("Invalid CKD payload size (< 44 bytes)")
@@ -61,37 +61,37 @@ def strip_ckd_header(ckd_bytes: bytes) -> tuple[bytes, str]:
         return payload, 'dds'
     elif payload[:4] == b'\x44\x46\x76\x4E':  # "DFvN" (Switch XTX)
         return payload, 'xtx'
+    elif payload[:4] == b'Gfx2':  # Wii U GTX
+        return payload, 'gtx'
+    elif payload[:4] == b'\x02\x00\x00\x00':  # GTF
+        return payload, 'gtf'
 
     return payload, 'raw'
 
 
 def wrap_dds_to_tga_ckd(dds_bytes: bytes) -> bytes:
-    """Wrap standard DDS file bytes in a UbiArt PC texture CKD header.
-
-    Args:
-        dds_bytes: Raw DDS file content (must start with b'DDS ').
-
-    Returns:
-        Complete .tga.ckd binary content ready to write to disk.
-    """
-    return _CKD_TEXTURE_HEADER + dds_bytes
+    """Wrap standard DDS file bytes in a UbiArt PC texture CKD header."""
+    if len(dds_bytes) < 128 or dds_bytes[:4] != b'DDS ':
+        raise TextureEncodingError("Invalid DDS payload")
+        
+    fourcc = dds_bytes[84:88]
+    header = bytearray(_CKD_TEXTURE_HEADER)
+    
+    if fourcc == b'DXT5':
+        header[22] = 0x18
+    elif fourcc == b'DXT1':
+        header[22] = 0x18 # JD2017 PC uses 0x18 broadly for DXT
+    elif fourcc == b'\x00\x00\x00\x00':
+        header[22] = 0x15
+    else:
+        # Default to 0x18 for other compressed formats
+        header[22] = 0x18
+        
+    return bytes(header) + dds_bytes
 
 
 def convert_texture_lossless(src_ckd_bytes: bytes) -> bytes:
-    """Losslessly convert Switch/PC texture CKDs into a PC-compatible texture CKD.
-
-    Handles DDS payloads directly; XTX payloads are deswizzled via xtx_extractor.
-    If the file is a raw PNG or JPEG masquerading as a CKD, it will be compiled into DDS.
-
-    Args:
-        src_ckd_bytes: Raw bytes of the source .tga.ckd file.
-
-    Returns:
-        PC-compatible .tga.ckd binary content.
-
-    Raises:
-        TextureEncodingError: If the format is unsupported.
-    """
+    """Losslessly convert Switch/PC texture CKDs into a PC-compatible texture CKD."""
     if src_ckd_bytes.startswith(b'\x89PNG') or src_ckd_bytes.startswith(b'\xff\xd8'):
         return compile_image_bytes_to_tga_ckd(src_ckd_bytes)
 
@@ -100,27 +100,38 @@ def convert_texture_lossless(src_ckd_bytes: bytes) -> bytes:
     if fmt == 'dds':
         return wrap_dds_to_tga_ckd(payload)
 
-    if fmt == 'xtx':
+    if fmt in ('xtx', 'gtx', 'gtf'):
         import subprocess
         import tempfile
 
-        xtx_exe = Path(__file__).resolve().parent.parent.parent / "Things" / "JDTools - 1.9.0" / "bin" / "xtx_extract.exe"
-        if not xtx_exe.exists():
-            raise TextureEncodingError(f"Missing XTX extractor at {xtx_exe}")
-
+        jdtools_bin = Path(__file__).resolve().parent.parent.parent / "Things" / "JDTools - 1.9.0" / "bin"
+        
         with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp_xtx = Path(tmp_dir) / "temp.xtx"
-            tmp_xtx.write_bytes(payload)
-
-            result = subprocess.run([str(xtx_exe), str(tmp_xtx)], capture_output=True)
-            if result.returncode != 0:
-                raise TextureEncodingError(f"xtx_extract failed: {result.stderr.decode(errors='replace')}")
-
-            tmp_dds = tmp_xtx.with_suffix(".dds")
-            if not tmp_dds.exists():
-                raise TextureEncodingError("xtx_extract did not produce a DDS file")
+            tmp_in = Path(tmp_dir) / f"temp.{fmt}"
+            tmp_in.write_bytes(payload)
+            tmp_out = tmp_in.with_suffix(".dds")
             
-            dds_data = tmp_dds.read_bytes()
+            if fmt == 'xtx':
+                exe = jdtools_bin / "xtx_extract.exe"
+                cmd = [str(exe), "-o", str(tmp_out), str(tmp_in)]
+            elif fmt == 'gtx':
+                exe = jdtools_bin / "texconv2.exe"
+                cmd = [str(exe), "-i", str(tmp_in), "-o", str(tmp_out)]
+            else:
+                exe = jdtools_bin / "gtf2dds.exe"
+                cmd = [str(exe), str(tmp_in), "-o", str(tmp_out)]
+
+            if not exe.exists():
+                raise TextureEncodingError(f"Missing extractor at {exe}")
+
+            result = subprocess.run(cmd, capture_output=True)
+            if result.returncode != 0 and not tmp_out.exists():
+                raise TextureEncodingError(f"{exe.name} failed: {result.stderr.decode(errors='replace')}")
+
+            if not tmp_out.exists():
+                raise TextureEncodingError(f"{exe.name} did not produce a DDS file")
+            
+            dds_data = tmp_out.read_bytes()
             return wrap_dds_to_tga_ckd(dds_data)
 
     raise TextureEncodingError(f"Unsupported texture format encoding: {fmt}")
