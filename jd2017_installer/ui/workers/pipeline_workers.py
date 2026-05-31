@@ -2403,14 +2403,14 @@ def install_map_to_game(
         if status_callback: status_callback("Copying video files...")
         if progress_callback: progress_callback(50)
         from jd2017_installer.installers.media_processor import copy_video
-        video_dst = map_target / "videoscoach" / f"{codename}.webm"
+        video_dst = map_target / "videoscoach" / f"{codename.lower()}.vp8"
         copy_video(
             media.video_path,
             video_dst,
             config=config,
         )
         if media.map_preview_video and media.map_preview_video.exists():
-            preview_dst = map_target / "videoscoach" / f"{codename}_MapPreview.webm"
+            preview_dst = map_target / "videoscoach" / f"{codename.lower()}_MapPreview.webm"
             copy_video(media.map_preview_video, preview_dst, config=config)
 
     # 3. Copy/Rename MenuArt assets (Cover, Banner, Coach, etc.)
@@ -2440,7 +2440,7 @@ def install_map_to_game(
             else:
                 ext = suffix
                 
-            dst_name = f"{codename}_{art_suffix}{ext}"
+            dst_name = f"{codename.lower()}_{art_suffix}{ext.lower()}"
             shutil.copy2(src_path, textures_dir / dst_name)
     
     def _extract_coach_index(path: Path) -> int:
@@ -2465,7 +2465,7 @@ def install_map_to_game(
                 ext = ".tga.ckd"
             else:
                 ext = suffix
-            dst_name = f"{codename}_coach_{idx}{ext}"
+            dst_name = f"{codename.lower()}_coach_{idx}{ext.lower()}"
             shutil.copy2(coach_img, textures_dir / dst_name)
             
     for phone_img in media.coach_phone_images:
@@ -2480,7 +2480,7 @@ def install_map_to_game(
             elif phone_img.suffix.lower() == ".png" or phone_img.suffix.lower() == ".jpg":
                 ext = phone_img.suffix.lower()
 
-            dst_name = f"{codename}_coach_{idx}_phone{ext}"
+            dst_name = f"{codename.lower()}_coach_{idx}_phone{ext.lower()}"
             shutil.copy2(phone_img, textures_dir / dst_name)
 
 
@@ -2501,9 +2501,9 @@ def install_map_to_game(
                 ext = asset.suffix.lower()
                 if ext not in (".ckd", ".tga", ".png", ".jpg", ".jpeg"):
                     continue
-                target_name = asset.name
-                if not target_name.lower().startswith(f"{codename.lower()}_"):
-                    target_name = f"{codename}_{target_name}"
+                target_name = asset.name.lower()
+                if not target_name.startswith(f"{codename.lower()}_"):
+                    target_name = f"{codename.lower()}_{target_name}"
                 shutil.copy2(asset, textures_dir / target_name)
 
         if status_callback: status_callback("Converting dance tapes...")

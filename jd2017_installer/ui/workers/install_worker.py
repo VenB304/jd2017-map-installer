@@ -261,20 +261,33 @@ class InstallWorker(QObject):
                     raw = ext_file.read_bytes()
                     converted = convert_texture_lossless(raw)
                     # Keep single 'b' for expand background as per guide.md
-                    target_name = ext_file.name
+                    target_name = ext_file.name.lower()
                     if "albumbbkg" in target_name:
                         target_name = target_name.replace("albumbbkg", "albumbkg")
                     (menuart_dir / target_name).write_bytes(converted)
                 except Exception as e:
                     self._log(logging.WARNING, f"Failed to convert menuart {ext_file.name}: {e}")
                     
+            # If a custom banner_bkg.dds is provided as per guide.md, wrap it to PC tga.ckd
+            from jd2017_installer.installers.texture_encoder import wrap_dds_to_tga_ckd
+            for dds_file in extracted_path.glob("*.dds"):
+                if "banner_bkg" in dds_file.name.lower():
+                    try:
+                        dds_data = dds_file.read_bytes()
+                        wrapped = wrap_dds_to_tga_ckd(dds_data)
+                        target_name = f"{codename.lower()}_banner_bkg.tga.ckd"
+                        (menuart_dir / target_name).write_bytes(wrapped)
+                        self._log(logging.INFO, f"Successfully wrapped custom DDS banner {dds_file.name} to tga.ckd")
+                    except Exception as e:
+                        self._log(logging.WARNING, f"Failed to wrap custom DDS banner {dds_file.name}: {e}")
+                        
             # Uncooked phone assets belong in world/maps/[codename]/menuart/textures/ as per guide.md (Lines 50-60)
             world_menuart_dir = paths["world_menuart_textures"]
             for ext_img in extracted_path.glob("*_phone.*"):
                 if ext_img.suffix.lower() in (".png", ".jpg", ".jpeg"):
                     try:
-                        shutil.copy2(ext_img, world_menuart_dir / ext_img.name)
-                        self._log(logging.INFO, f"Copied phone image {ext_img.name} to uncooked menuart textures")
+                        shutil.copy2(ext_img, world_menuart_dir / ext_img.name.lower())
+                        self._log(logging.INFO, f"Copied phone image {ext_img.name.lower()} to uncooked menuart textures")
                     except Exception as e:
                         self._log(logging.WARNING, f"Failed to copy phone image {ext_img.name}: {e}")
                         
@@ -302,8 +315,8 @@ class InstallWorker(QObject):
                 if "dance" in dtape_file.name.lower():
                     try:
                         dtape_text = dtape_file.read_text(encoding="utf-8", errors="replace")
-                        if ".png" in dtape_text:
-                            dtape_text = dtape_text.replace(".png", ".tga")
+                        if ".png" in dtape_text or ".PNG" in dtape_text:
+                            dtape_text = dtape_text.replace(".png", ".tga").replace(".PNG", ".tga")
                             dtape_file.write_text(dtape_text, encoding="utf-8")
                             self._log(logging.INFO, f"Patched picto paths in {dtape_file.name}")
                     except Exception as e:
@@ -314,7 +327,7 @@ class InstallWorker(QObject):
             dst_musictrack = paths["cache_audio"] / f"{codename.lower()}_musictrack.tpl.ckd"
             if src_musictrack.exists():
                 mt_text = src_musictrack.read_text(encoding="utf-8", errors="replace")
-                mt_text = mt_text.replace(".wav", ".ogg")
+                mt_text = mt_text.replace(".wav", ".ogg").replace(".WAV", ".ogg")
                 dst_musictrack.parent.mkdir(parents=True, exist_ok=True)
                 dst_musictrack.write_text(mt_text, encoding="utf-8")
             else:
