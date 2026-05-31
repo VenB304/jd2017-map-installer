@@ -140,7 +140,12 @@ class InstallWorker(QObject):
                 jdlo_meta_path = extracted_path / "jdlo_metadata.json"
                 if not jdlo_meta_path.exists():
                     import re
-                    coach_files = list(extracted_path.rglob(f"{codename.lower()}_coach_*.tga.ckd")) + list(extracted_path.rglob(f"{codename.lower()}_coach_*.png.ckd"))
+                    coach_files = (
+                        list(extracted_path.rglob(f"{codename.lower()}_coach_*.tga.ckd")) + 
+                        list(extracted_path.rglob(f"{codename.lower()}_coach_*.png.ckd")) +
+                        list(extracted_path.rglob(f"{codename.lower()}_coach_*.png")) +
+                        list(extracted_path.rglob(f"{codename.lower()}_coach_*.jpg"))
+                    )
                     inferred_coach = 1
                     for cf in coach_files:
                         m = re.search(r"coach_(\d+)", cf.name.lower())

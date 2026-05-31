@@ -235,30 +235,35 @@ def create_banner_background_ckd(
     """
     from PIL import ImageChops, ImageOps
 
-    bg_img = Image.open(map_bkg_path).convert("RGBA")
     canvas_w, canvas_h = 2048, 1024
 
-    # Proportional cover resize
-    bg_w, bg_h = bg_img.size
-    scale = max(canvas_w / bg_w, canvas_h / bg_h)
-    new_w, new_h = int(bg_w * scale), int(bg_h * scale)
-    bg_img = bg_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    try:
+        bg_img = Image.open(map_bkg_path).convert("RGBA")
+        
+        # Proportional cover resize
+        bg_w, bg_h = bg_img.size
+        scale = max(canvas_w / bg_w, canvas_h / bg_h)
+        new_w, new_h = int(bg_w * scale), int(bg_h * scale)
+        bg_img = bg_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
-    # Centering crop
-    offset_x = (new_w - canvas_w) // 2
-    offset_y = (new_h - canvas_h) // 2
-    bg_img = bg_img.crop((offset_x, offset_y, offset_x + canvas_w, offset_y + canvas_h))
+        # Centering crop
+        offset_x = (new_w - canvas_w) // 2
+        offset_y = (new_h - canvas_h) // 2
+        bg_img = bg_img.crop((offset_x, offset_y, offset_x + canvas_w, offset_y + canvas_h))
 
-    # Convert canvas to greyscale
-    greyscale = ImageOps.grayscale(bg_img).convert("RGBA")
+        # Convert canvas to greyscale
+        greyscale = ImageOps.grayscale(bg_img).convert("RGBA")
 
-    # Create difference layer: solid blue #0000FF canvas
-    blue_layer = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 255, 255))
+        # Create difference layer: solid blue #0000FF canvas
+        blue_layer = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 255, 255))
 
-    # Mix layers using Difference blending logic
-    result = ImageChops.difference(greyscale, blue_layer)
+        # Mix layers using Difference blending logic
+        result = ImageChops.difference(greyscale, blue_layer)
+        logger.info("Created banner background: %s", output_ckd_path.name)
+    except Exception as e:
+        logger.warning("Could not process %s for banner generation (%s). Generating generic blue fallback banner.", map_bkg_path.name, e)
+        # Create a generic blue fallback layer
+        result = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 255, 255))
 
     # Compile directly to .tga.ckd
     compile_image_to_tga_ckd(result, output_ckd_path)
-
-    logger.info("Created banner background: %s", output_ckd_path.name)
