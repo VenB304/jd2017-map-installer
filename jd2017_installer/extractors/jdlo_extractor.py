@@ -218,6 +218,10 @@ class JDLOExtractor(BaseExtractor):
         if not pkg_entry or "url" not in pkg_entry:
             raise JDLOExtractorError(f"Package URL for '{codename}' not found in JDLO packages database.")
             
+        self._download_dir.mkdir(parents=True, exist_ok=True)
+        import json
+        (self._download_dir / "jdlo_metadata.json").write_text(json.dumps(song_entry, indent=2), encoding="utf-8")
+            
         package_url = pkg_entry["url"]
         
         urls_map = self._client.get_content_authorization(codename)
