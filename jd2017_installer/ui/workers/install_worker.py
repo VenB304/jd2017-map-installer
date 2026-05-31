@@ -305,7 +305,7 @@ class InstallWorker(QObject):
             if not banner_dst.exists():
                 map_bkg_src = self.extractor.media_context.map_bkg_path if hasattr(self, "extractor") and hasattr(self.extractor, "media_context") else None
                 if not map_bkg_src or not map_bkg_src.exists():
-                    for ext in (".png", ".tga", ".jpg"):
+                    for ext in (".png", ".tga", ".jpg", ".png.ckd", ".tga.ckd", ".jpg.ckd"):
                         candidate = menuart_dir / f"{codename.lower()}_map_bkg{ext}"
                         if candidate.exists():
                             map_bkg_src = candidate
@@ -317,6 +317,15 @@ class InstallWorker(QObject):
                         self._log(logging.INFO, f"Generated banner_bkg from map_bkg for '{codename}'")
                     except Exception as e:
                         self._log(logging.WARNING, f"Failed to generate banner_bkg for '{codename}': {e}")
+                
+                # Ultimate fallback: just duplicate a background texture to prevent engine crash
+                if not banner_dst.exists():
+                    for fallback_name in (f"{codename.lower()}_map_bkg.tga.ckd", f"{codename.lower()}_cover_albumbkg.tga.ckd", f"{codename.lower()}_cover_generic.tga.ckd"):
+                        fallback_src = menuart_dir / fallback_name
+                        if fallback_src.exists():
+                            shutil.copy2(fallback_src, banner_dst)
+                            self._log(logging.INFO, f"Used {fallback_name} as fallback for banner_bkg to prevent crash.")
+                            break
                 
             # 3. Modify dtape `.png` to `.tga`
             dtape_candidates = list(dst_timeline.glob("*.dtape.ckd"))
@@ -330,15 +339,16 @@ class InstallWorker(QObject):
                             self._log(logging.INFO, f"Patched picto paths in {dtape_file.name}")
                     except Exception as e:
                         self._log(logging.WARNING, f"Failed to patch dtape '{dtape_file.name}': {e}")
-                
+
             # 4. Modify musictrack `.wav` to `.ogg`
             src_musictrack = extracted_world / "audio" / f"{codename.lower()}_musictrack.tpl.ckd"
             dst_musictrack = paths["cache_audio"] / f"{codename.lower()}_musictrack.tpl.ckd"
             if src_musictrack.exists():
-                mt_text = src_musictrack.read_text(encoding="utf-8", errors="replace")
-                mt_text = mt_text.replace(".wav", ".ogg").replace(".WAV", ".ogg")
                 dst_musictrack.parent.mkdir(parents=True, exist_ok=True)
-                dst_musictrack.write_text(mt_text, encoding="utf-8")
+                mt_bytes = src_musictrack.read_bytes()
+                mt_bytes = mt_bytes.replace(b".wav", b".ogg").replace(b".WAV", b".ogg")
+                dst_musictrack.write_bytes(mt_bytes)
+                self._log(logging.INFO, f"Copied and patched {src_musictrack.name} to .ogg")
             else:
                 self._log(logging.WARNING, f"musictrack.tpl.ckd not found for '{codename}', audio sequencing may be incomplete")
                 
