@@ -400,7 +400,7 @@ def write_videoscoach_files(paths: dict[str, Path], codename: str) -> None:
         "PROCEDURAL": 0, "STARTPAUSED": 0, "FORCEISENVIRONMENT": 0,
         "COMPONENTS": [{
             "__class": "PleoComponent_Template",
-            "video": f"world/maps/{name}/videoscoach/{name}.vp8",
+            "video": f"world/maps/{name}/videoscoach/{name}.webm",
             "dashMPD": f"world/maps/{name}/videoscoach/{name}.mpd",
             "channelID": ""
         }]

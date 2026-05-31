@@ -2403,7 +2403,7 @@ def install_map_to_game(
         if status_callback: status_callback("Copying video files...")
         if progress_callback: progress_callback(50)
         from jd2017_installer.installers.media_processor import copy_video
-        video_dst = map_target / "videoscoach" / f"{codename.lower()}.vp8"
+        video_dst = map_target / "videoscoach" / f"{codename.lower()}.webm"
         copy_video(
             media.video_path,
             video_dst,

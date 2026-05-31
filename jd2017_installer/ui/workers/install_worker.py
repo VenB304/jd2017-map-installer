@@ -336,7 +336,7 @@ class InstallWorker(QObject):
             # 5. Copy media assets to world directories
             self._log(logging.INFO, "Copying media assets (audio/video)...")
             audio_dst = paths["world_audio"] / f"{codename.lower()}.ogg"
-            video_dst = paths["world_videoscoach"] / f"{codename.lower()}.vp8"
+            video_dst = paths["world_videoscoach"] / f"{codename.lower()}.webm"
             
             ogg_candidates = list(extracted_path.glob("*.ogg"))
             if ogg_candidates:
