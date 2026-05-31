@@ -90,7 +90,7 @@ def wrap_dds_to_tga_ckd(dds_bytes: bytes) -> bytes:
     return bytes(header) + dds_bytes
 
 
-def convert_texture_lossless(src_ckd_bytes: bytes) -> bytes:
+def convert_texture_lossless(src_ckd_bytes: bytes, ckd_path: Path) -> bytes | str:
     """Losslessly convert Switch/PC texture CKDs into a PC-compatible texture CKD."""
     if src_ckd_bytes.startswith(b'\x89PNG') or src_ckd_bytes.startswith(b'\xff\xd8'):
         return compile_image_bytes_to_tga_ckd(src_ckd_bytes)
@@ -98,7 +98,8 @@ def convert_texture_lossless(src_ckd_bytes: bytes) -> bytes:
     payload, fmt = strip_ckd_header(src_ckd_bytes)
 
     if fmt == 'dds':
-        return wrap_dds_to_tga_ckd(payload)
+        # Already a PC native DDS texture, keep the original perfectly intact file
+        return str(ckd_path)
 
     if fmt in ('xtx', 'gtx', 'gtf'):
         import subprocess

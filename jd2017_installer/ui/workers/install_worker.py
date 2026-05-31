@@ -277,14 +277,20 @@ class InstallWorker(QObject):
                 if "pictos" in ext_file.parts or "timeline" in ext_file.parts:
                     continue # Skip timeline/pictos, handled elsewhere
                 try:
-                    raw = ext_file.read_bytes()
-                    converted = convert_texture_lossless(raw)
                     # Keep single 'b' for expand background as per guide.md
                     target_name = ext_file.name.lower()
-                    if "albumbbkg" in target_name:
-                        target_name = target_name.replace("albumbbkg", "albumbkg")
-                    (menuart_dir / target_name).write_bytes(converted)
-                    self._log(logging.DEBUG, f"Copied and converted {ext_file.name} to menuart")
+                    # Check if it needs conversion to PC native
+                    try:
+                        pc_ckd = convert_texture_lossless(ext_file.read_bytes(), ext_file)
+                        if isinstance(pc_ckd, str):
+                            # It's already PC native, copy the original file
+                            shutil.copy2(pc_ckd, menuart_dir / target_name)
+                        else:
+                            # It was converted, write the bytes
+                            (menuart_dir / target_name).write_bytes(pc_ckd)
+                        self._log(logging.INFO, f"Copied and converted {ext_file.name} to menuart")
+                    except Exception as e:
+                        self._log(logging.WARNING, f"Failed to convert menuart {ext_file.name}: {e}")
                 except Exception as e:
                     self._log(logging.WARNING, f"Failed to convert menuart {ext_file.name}: {e}")
             
