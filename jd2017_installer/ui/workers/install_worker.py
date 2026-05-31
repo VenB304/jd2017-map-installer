@@ -305,11 +305,18 @@ class InstallWorker(QObject):
             if not banner_dst.exists():
                 map_bkg_src = self.extractor.media_context.map_bkg_path if hasattr(self, "extractor") and hasattr(self.extractor, "media_context") else None
                 if not map_bkg_src or not map_bkg_src.exists():
-                    for ext in (".png", ".tga", ".jpg", ".png.ckd", ".tga.ckd", ".jpg.ckd"):
-                        candidate = menuart_dir / f"{codename.lower()}_map_bkg{ext}"
-                        if candidate.exists():
-                            map_bkg_src = candidate
+                    for search_dir in (extracted_path, menuart_dir):
+                        if map_bkg_src and map_bkg_src.exists():
                             break
+                        for ext in (".png", ".tga", ".jpg", ".png.ckd", ".tga.ckd", ".jpg.ckd"):
+                            # Check original casing and lowercase casing
+                            for name in (f"{codename}_map_bkg{ext}", f"{codename.lower()}_map_bkg{ext}"):
+                                candidate = search_dir / name
+                                if candidate.exists():
+                                    map_bkg_src = candidate
+                                    break
+                            if map_bkg_src and map_bkg_src.exists():
+                                break
                 if map_bkg_src and map_bkg_src.exists():
                     try:
                         from jd2017_installer.installers.texture_encoder import create_banner_background_ckd
@@ -380,7 +387,7 @@ class InstallWorker(QObject):
                 except (ValueError, IndexError):
                     pass
             next_num = max_num + 1
-            bundle_name = f"bundle_{next_num:02d}_pc.ipk"
+            bundle_name = f"bundle_{next_num}_pc.ipk"
             bundle_path = game_dir / bundle_name
             
             self.signals.progress.emit("ipk_packing", 0, 1, f"Building {bundle_name}")
