@@ -129,12 +129,15 @@ def list_registered_maps(game_dir: Path) -> list[str]:
             # Find all USERFRIENDLY="..."
             matches = re.findall(r'USERFRIENDLY="([^"]+)"', text, re.IGNORECASE)
             
-            # Deduplicate preserving order
+            # Deduplicate preserving order, and ignore built-in skuscene elements
             seen = set()
             result = []
             for m in matches:
-                if m.lower() not in seen:
-                    seen.add(m.lower())
+                m_low = m.lower()
+                if m_low in ("skuscene_db", "skuscene_map"):
+                    continue
+                if m_low not in seen:
+                    seen.add(m_low)
                     result.append(m)
             return result
         except Exception as e:
@@ -148,6 +151,10 @@ def is_registered(game_dir: Path, codename: str) -> bool:
 
 def unregister_map(game_dir: Path, codename: str) -> None:
     """Remove a map's Actor entry from patch_pc.ipk SkuScene files."""
+    if codename.lower() in ("skuscene_db", "skuscene_map"):
+        logger.warning("Attempted to unregister reserved SkuScene actor: %s", codename)
+        return
+
     patch_ipk = game_dir / "patch_pc.ipk"
     if not patch_ipk.exists():
         return
@@ -196,7 +203,7 @@ def unregister_map(game_dir: Path, codename: str) -> None:
         logger.info("SkuScene unpatch complete for '%s'", codename)
 
 def patch_sku_scenes(game_dir: Path | str, codenames: list[str] | str) -> None:
-    """Patch the SkuScene files inside patch_pc.ipk to register a new map.
+    """Patch the SkuScene files inside patch_pc.ipk to register new maps.
 
     This:
     1. Unpacks patch_pc.ipk to a temp directory.
@@ -205,13 +212,19 @@ def patch_sku_scenes(game_dir: Path | str, codenames: list[str] | str) -> None:
 
     Args:
         game_dir: JD2017 PC game root directory.
-        codename: Lowercase map codename to register.
+        codenames: Lowercase map codename(s) to register.
     """
+    if isinstance(game_dir, str):
+        game_dir = Path(game_dir)
+        
     patch_ipk = game_dir / "patch_pc.ipk"
     if not patch_ipk.exists():
         raise FileNotFoundError(f"patch_pc.ipk not found in {game_dir}")
 
-    logger.info("Patching SkuScene files for codename: %s", codename)
+    if isinstance(codenames, str):
+        codenames = [codenames]
+
+    logger.info("Patching SkuScene files for codenames: %s", codenames)
 
     with tempfile.TemporaryDirectory(prefix="jd17_patch_") as tmp:
         tmp_dir = Path(tmp)
@@ -225,13 +238,14 @@ def patch_sku_scenes(game_dir: Path | str, codenames: list[str] | str) -> None:
         for sku_rel_path in _SKU_FILES:
             isc_path = extract_dir / sku_rel_path
             if isc_path.exists():
-                if _inject_actor_into_isc(isc_path, codename):
-                    injected_any = True
+                for codename in codenames:
+                    if _inject_actor_into_isc(isc_path, codename):
+                        injected_any = True
             else:
                 logger.warning("SKU file not found: %s", sku_rel_path)
 
         if not injected_any:
-            logger.info("No new injections needed for '%s'", codename)
+            logger.info("No new injections needed for '%s'", codenames)
             return
 
         # 3. Backup original and repack
@@ -241,4 +255,4 @@ def patch_sku_scenes(game_dir: Path | str, codenames: list[str] | str) -> None:
             logger.info("Backed up original patch_pc.ipk")
 
         pack_folder_to_ipk(extract_dir, patch_ipk)
-        logger.info("SkuScene patch complete for '%s'", codename)
+        logger.info("SkuScene patch complete for '%s'", codenames)

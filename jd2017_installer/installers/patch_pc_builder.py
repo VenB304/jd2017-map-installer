@@ -78,17 +78,17 @@ def _create_patch_pc_from_base(game_dir: Path, patch_ipk: Path) -> None:
         tmp_dir = Path(tmp)
         unpack_ipk_to_folder(bundle_pc, tmp_dir, filter_paths=_SKU_FILES)
         
-        # Verify something was extracted
-        has_skus = False
-        for sku in _SKU_FILES:
-            if (tmp_dir / sku).exists():
-                has_skus = True
+        # Ensure both SkuScenes exist
+        from jd2017_installer.installers.sku_scene import _BLANK_SKUSCENE_XML
+        for sku_rel_path in _SKU_FILES:
+            base_sku = tmp_dir / sku_rel_path
+            if not base_sku.exists():
+                base_sku.parent.mkdir(parents=True, exist_ok=True)
+                sku = "jd2017-pc-all" if "all" in base_sku.name.lower() else "jd2017-pc-ww"
+                base_sku.write_bytes(_BLANK_SKUSCENE_XML.format(sku=sku).encode("utf-8"))
                 
-        if has_skus:
-            pack_folder_to_ipk(tmp_dir, patch_ipk)
-            logger.info("Successfully initialized new patch_pc.ipk")
-        else:
-            logger.error("Failed to extract any SkuScene from bundle_pc.ipk")
+        pack_folder_to_ipk(tmp_dir, patch_ipk)
+        logger.info("Successfully initialized new patch_pc.ipk")
 
 def _create_patch_pc_with_merge(game_dir: Path, patch_ipk: Path, bundle_files: list[Path]) -> None:
     bundle_pc = game_dir / "bundle_pc.ipk"
@@ -100,15 +100,7 @@ def _create_patch_pc_with_merge(game_dir: Path, patch_ipk: Path, bundle_files: l
         tmp_dir = Path(tmp)
         unpack_ipk_to_folder(bundle_pc, tmp_dir, filter_paths=_SKU_FILES)
         
-        # Verify something was extracted
-        has_skus = False
-        for sku in _SKU_FILES:
-            if (tmp_dir / sku).exists():
-                has_skus = True
-                
-        if not has_skus:
-            logger.error("Failed to extract any SkuScene from bundle_pc.ipk")
-            return
+        # We don't need to verify something was extracted because we'll create blanks if missing
 
         from jd2017_installer.extractors.archive_ipk import inspect_ipk
         from jd2017_installer.installers.sku_scene import _inject_actor_into_isc
@@ -124,11 +116,16 @@ def _create_patch_pc_with_merge(game_dir: Path, patch_ipk: Path, bundle_files: l
                 logger.warning(f"Failed to inspect bundle {b.name}: {e}")
                 
         # Inject each codename into the extracted SkuScenes
+        from jd2017_installer.installers.sku_scene import _BLANK_SKUSCENE_XML
         for sku_rel_path in _SKU_FILES:
             base_sku = tmp_dir / sku_rel_path
-            if base_sku.exists():
-                for codename in all_codenames:
-                    _inject_actor_into_isc(base_sku, codename)
+            if not base_sku.exists():
+                base_sku.parent.mkdir(parents=True, exist_ok=True)
+                sku = "jd2017-pc-all" if "all" in base_sku.name.lower() else "jd2017-pc-ww"
+                base_sku.write_bytes(_BLANK_SKUSCENE_XML.format(sku=sku).encode("utf-8"))
+            
+            for codename in all_codenames:
+                _inject_actor_into_isc(base_sku, codename)
         
         pack_folder_to_ipk(tmp_dir, patch_ipk)
         logger.info(f"Successfully created patch_pc.ipk with {len(all_codenames)} merged maps.")

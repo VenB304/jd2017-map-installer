@@ -2147,6 +2147,27 @@ def uninstall_map_from_game(
         if not sku_unregistered:
             raise RuntimeError(f"Map is still registered in SkuScene after uninstall: {codename}")
 
+    # Cleanup empty bundle IPKs
+    try:
+        from jd2017_installer.installers.sku_scene import list_registered_maps
+        from jd2017_installer.extractors.archive_ipk import inspect_ipk
+        
+        currently_registered = [m.lower() for m in list_registered_maps(normalized_game_dir)]
+        bundle_pattern = re.compile(r"^bundle_\d+_pc\.ipk$", re.IGNORECASE)
+        
+        for bundle_file in normalized_game_dir.iterdir():
+            if bundle_file.is_file() and bundle_pattern.match(bundle_file.name):
+                maps_in_ipk = [m.lower() for m in inspect_ipk(bundle_file)]
+                if name_lower in maps_in_ipk:
+                    any_registered = any(m in currently_registered for m in maps_in_ipk)
+                    if not any_registered:
+                        if status_callback:
+                            status_callback(f"Removing empty bundle: {bundle_file.name}")
+                        bundle_file.unlink()
+                        logger.info("Deleted empty bundle IPK: %s", bundle_file.name)
+    except Exception as e:
+        logger.warning("Failed during empty bundle cleanup: %s", e)
+
     return UninstallResult(
         codename=codename,
         removed_map_dirs=[p for p in map_dirs_before if not p.exists()],
@@ -2710,8 +2731,8 @@ def install_map_to_game(
     if status_callback: status_callback("Registering in SkuScene...")
     if progress_callback: progress_callback(95)
     try:
-        from jd2017_installer.installers.sku_scene import register_map
-        register_map(game_dir, codename)
+        from jd2017_installer.installers.sku_scene import patch_sku_scenes
+        patch_sku_scenes(game_dir, codename)
     except Exception as e:
         logger.warning("SkuScene registration failed (non-fatal): %s", e)
 
