@@ -81,6 +81,7 @@ def convert_texture_lossless(src_ckd_bytes: bytes) -> bytes:
     """Losslessly convert Switch/PC texture CKDs into a PC-compatible texture CKD.
 
     Handles DDS payloads directly; XTX payloads are deswizzled via xtx_extractor.
+    If the file is a raw PNG or JPEG masquerading as a CKD, it will be compiled into DDS.
 
     Args:
         src_ckd_bytes: Raw bytes of the source .tga.ckd file.
@@ -91,6 +92,9 @@ def convert_texture_lossless(src_ckd_bytes: bytes) -> bytes:
     Raises:
         TextureEncodingError: If the format is unsupported.
     """
+    if src_ckd_bytes.startswith(b'\x89PNG') or src_ckd_bytes.startswith(b'\xff\xd8'):
+        return compile_image_bytes_to_tga_ckd(src_ckd_bytes)
+
     payload, fmt = strip_ckd_header(src_ckd_bytes)
 
     if fmt == 'dds':

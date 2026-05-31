@@ -323,10 +323,10 @@ class InstallWorker(QObject):
             for dtape_file in dtape_candidates:
                 if "dance" in dtape_file.name.lower():
                     try:
-                        dtape_text = dtape_file.read_text(encoding="utf-8", errors="replace")
-                        if ".png" in dtape_text or ".PNG" in dtape_text:
-                            dtape_text = dtape_text.replace(".png", ".tga").replace(".PNG", ".tga")
-                            dtape_file.write_text(dtape_text, encoding="utf-8")
+                        dtape_bytes = dtape_file.read_bytes()
+                        if b".png" in dtape_bytes or b".PNG" in dtape_bytes:
+                            dtape_bytes = dtape_bytes.replace(b".png", b".tga").replace(b".PNG", b".tga")
+                            dtape_file.write_bytes(dtape_bytes)
                             self._log(logging.INFO, f"Patched picto paths in {dtape_file.name}")
                     except Exception as e:
                         self._log(logging.WARNING, f"Failed to patch dtape '{dtape_file.name}': {e}")
