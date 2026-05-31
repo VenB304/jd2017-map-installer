@@ -447,29 +447,85 @@ def write_main_scene_isc(paths: dict[str, Path], codename: str) -> None:
     name = codename.lower()
     cache_root = paths["cache_root"]
 
+    def _get_embedded_scene(file_path: Path) -> str:
+        content = file_path.read_text(encoding="utf-8")
+        start_idx = content.find("<Scene ")
+        end_idx = content.rfind("</Scene>")
+        if start_idx == -1 or end_idx == -1:
+            raise ValueError(f"Could not find <Scene> block in {file_path}")
+        return content[start_idx : end_idx + len("</Scene>")]
+
+    audio_scene = _get_embedded_scene(paths["cache_audio"] / f"{name}_audio.isc.ckd")
+    cine_scene = _get_embedded_scene(paths["cache_cinematics"] / f"{name}_cine.isc.ckd")
+    graph_scene = _get_embedded_scene(paths["cache_graph"] / f"{name}_graph.isc.ckd")
+    tml_scene = _get_embedded_scene(paths["cache_timeline"] / f"{name}_tml.isc.ckd")
+    video_scene = _get_embedded_scene(paths["cache_videoscoach"] / f"{name}_video.isc.ckd")
+    autodance_scene = _get_embedded_scene(paths["cache_autodance"] / f"{name}_autodance.isc.ckd")
+    menuart_scene = _get_embedded_scene(paths["cache_menuart"] / f"{name}_menuart.isc.ckd")
+
     (cache_root / f"{name}_main_scene.isc.ckd").write_text(f"""<?xml version="1.0" encoding="ISO-8859-1"?>
 <root>
 \t<Scene ENGINE_VERSION="{_ENGINE_VERSION}" GRIDUNIT="2.000000" DEPTH_SEPARATOR="0" NEAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" FAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" viewFamily="0">
+\t\t<PLATFORM_FILTER>
+\t\t\t<TargetFilterList platform="WII">
+\t\t\t\t<objects VAL="{codename}_AUTODANCE" />
+\t\t\t</TargetFilterList>
+\t\t</PLATFORM_FILTER>
 \t\t<ACTORS NAME="SubSceneActor">
-\t\t\t<SubSceneActor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}_AUDIO" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="enginedata/actortemplates/subscene.tpl" RELATIVEPATH="world/maps/{name}/audio/{name}_audio.isc" EMBED_SCENE="0" IS_SINGLE_PIECE="0" ZFORCED="1" DIRECT_PICKING="1" />
+\t\t\t<SubSceneActor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}_AUDIO" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="enginedata/actortemplates/subscene.tpl" RELATIVEPATH="world/maps/{name}/audio/{name}_audio.isc" EMBED_SCENE="1" IS_SINGLE_PIECE="0" ZFORCED="1" DIRECT_PICKING="1" IGNORE_SAVE="0">
+\t\t\t\t<ENUM NAME="viewType" SEL="2" />
+\t\t\t\t<SCENE>
+{audio_scene}
+\t\t\t\t</SCENE>
+\t\t\t</SubSceneActor>
 \t\t</ACTORS>
 \t\t<ACTORS NAME="SubSceneActor">
-\t\t\t<SubSceneActor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}_CINE" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="enginedata/actortemplates/subscene.tpl" RELATIVEPATH="world/maps/{name}/cinematics/{name}_cine.isc" EMBED_SCENE="0" IS_SINGLE_PIECE="0" ZFORCED="1" DIRECT_PICKING="1" />
+\t\t\t<SubSceneActor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}_CINE" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="enginedata/actortemplates/subscene.tpl" RELATIVEPATH="world/maps/{name}/cinematics/{name}_cine.isc" EMBED_SCENE="1" IS_SINGLE_PIECE="0" ZFORCED="1" DIRECT_PICKING="1" IGNORE_SAVE="0">
+\t\t\t\t<ENUM NAME="viewType" SEL="2" />
+\t\t\t\t<SCENE>
+{cine_scene}
+\t\t\t\t</SCENE>
+\t\t\t</SubSceneActor>
 \t\t</ACTORS>
 \t\t<ACTORS NAME="SubSceneActor">
-\t\t\t<SubSceneActor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}_GRAPH" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="enginedata/actortemplates/subscene.tpl" RELATIVEPATH="world/maps/{name}/graph/{name}_graph.isc" EMBED_SCENE="0" IS_SINGLE_PIECE="0" ZFORCED="1" DIRECT_PICKING="1" />
+\t\t\t<SubSceneActor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}_GRAPH" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="enginedata/actortemplates/subscene.tpl" RELATIVEPATH="world/maps/{name}/graph/{name}_graph.isc" EMBED_SCENE="1" IS_SINGLE_PIECE="0" ZFORCED="1" DIRECT_PICKING="1" IGNORE_SAVE="0">
+\t\t\t\t<ENUM NAME="viewType" SEL="2" />
+\t\t\t\t<SCENE>
+{graph_scene}
+\t\t\t\t</SCENE>
+\t\t\t</SubSceneActor>
 \t\t</ACTORS>
 \t\t<ACTORS NAME="SubSceneActor">
-\t\t\t<SubSceneActor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}_TML" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="enginedata/actortemplates/subscene.tpl" RELATIVEPATH="world/maps/{name}/timeline/{name}_tml.isc" EMBED_SCENE="0" IS_SINGLE_PIECE="0" ZFORCED="1" DIRECT_PICKING="1" />
+\t\t\t<SubSceneActor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}_TML" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="enginedata/actortemplates/subscene.tpl" RELATIVEPATH="world/maps/{name}/timeline/{name}_tml.isc" EMBED_SCENE="1" IS_SINGLE_PIECE="0" ZFORCED="1" DIRECT_PICKING="1" IGNORE_SAVE="0">
+\t\t\t\t<ENUM NAME="viewType" SEL="2" />
+\t\t\t\t<SCENE>
+{tml_scene}
+\t\t\t\t</SCENE>
+\t\t\t</SubSceneActor>
 \t\t</ACTORS>
 \t\t<ACTORS NAME="SubSceneActor">
-\t\t\t<SubSceneActor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}_VIDEO" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="enginedata/actortemplates/subscene.tpl" RELATIVEPATH="world/maps/{name}/videoscoach/{name}_video.isc" EMBED_SCENE="0" IS_SINGLE_PIECE="0" ZFORCED="1" DIRECT_PICKING="1" />
+\t\t\t<SubSceneActor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}_VIDEO" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="enginedata/actortemplates/subscene.tpl" RELATIVEPATH="world/maps/{name}/videoscoach/{name}_video.isc" EMBED_SCENE="1" IS_SINGLE_PIECE="0" ZFORCED="1" DIRECT_PICKING="1" IGNORE_SAVE="0">
+\t\t\t\t<ENUM NAME="viewType" SEL="2" />
+\t\t\t\t<SCENE>
+{video_scene}
+\t\t\t\t</SCENE>
+\t\t\t</SubSceneActor>
 \t\t</ACTORS>
 \t\t<ACTORS NAME="SubSceneActor">
-\t\t\t<SubSceneActor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}_AUTODANCE" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="enginedata/actortemplates/subscene.tpl" RELATIVEPATH="world/maps/{name}/autodance/{name}_autodance.isc" EMBED_SCENE="0" IS_SINGLE_PIECE="0" ZFORCED="1" DIRECT_PICKING="1" />
+\t\t\t<SubSceneActor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}_AUTODANCE" MARKER="" POS2D="0.000000 -0.033823" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="enginedata/actortemplates/subscene.tpl" RELATIVEPATH="world/maps/{name}/autodance/{name}_autodance.isc" EMBED_SCENE="1" IS_SINGLE_PIECE="0" ZFORCED="1" DIRECT_PICKING="1" IGNORE_SAVE="0">
+\t\t\t\t<ENUM NAME="viewType" SEL="2" />
+\t\t\t\t<SCENE>
+{autodance_scene}
+\t\t\t\t</SCENE>
+\t\t\t</SubSceneActor>
 \t\t</ACTORS>
 \t\t<ACTORS NAME="SubSceneActor">
-\t\t\t<SubSceneActor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}_MENUART" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="enginedata/actortemplates/subscene.tpl" RELATIVEPATH="world/maps/{name}/menuart/{name}_menuart.isc" EMBED_SCENE="0" IS_SINGLE_PIECE="0" ZFORCED="1" DIRECT_PICKING="1" />
+\t\t\t<SubSceneActor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}_menuart" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="enginedata/actortemplates/subscene.tpl" RELATIVEPATH="world/maps/{name}/menuart/{name}_menuart.isc" EMBED_SCENE="1" IS_SINGLE_PIECE="0" ZFORCED="1" DIRECT_PICKING="1" IGNORE_SAVE="0">
+\t\t\t\t<ENUM NAME="viewType" SEL="3" />
+\t\t\t\t<SCENE>
+{menuart_scene}
+\t\t\t\t</SCENE>
+\t\t\t</SubSceneActor>
 \t\t</ACTORS>
 \t\t<ACTORS NAME="Actor">
 \t\t\t<Actor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}_SongDesc" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="world/maps/{name}/songdesc.tpl">
@@ -479,7 +535,15 @@ def write_main_scene_isc(paths: dict[str, Path], codename: str) -> None:
 \t\t\t</Actor>
 \t\t</ACTORS>
 \t\t<sceneConfigs>
-\t\t\t<SceneConfigs activeSceneConfig="0" />
+\t\t\t<SceneConfigs activeSceneConfig="0">
+\t\t\t\t<sceneConfigs NAME="JD_MapSceneConfig">
+\t\t\t\t\t<JD_MapSceneConfig name="" soundContext="" hud="0" phoneTitleLocId="4294967295" phoneImage="">
+\t\t\t\t\t\t<ENUM NAME="Pause_Level" SEL="6" />
+\t\t\t\t\t\t<ENUM NAME="type" SEL="1" />
+\t\t\t\t\t\t<ENUM NAME="musicscore" SEL="2" />
+\t\t\t\t\t</JD_MapSceneConfig>
+\t\t\t\t</sceneConfigs>
+\t\t\t</SceneConfigs>
 \t\t</sceneConfigs>
 \t</Scene>
 </root>""", encoding="utf-8")
