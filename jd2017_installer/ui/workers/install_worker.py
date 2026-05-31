@@ -308,8 +308,7 @@ class InstallWorker(QObject):
                         self._log(logging.WARNING, f"Failed to patch dtape '{dtape_file.name}': {e}")
                 
             # 4. Modify musictrack `.wav` to `.ogg`
-            extracted_cache = extracted_path / "cache" / "itf_cooked" / "pc" / "world" / "maps" / codename.lower()
-            src_musictrack = extracted_cache / "audio" / f"{codename.lower()}_musictrack.tpl.ckd"
+            src_musictrack = extracted_world / "audio" / f"{codename.lower()}_musictrack.tpl.ckd"
             dst_musictrack = paths["cache_audio"] / f"{codename.lower()}_musictrack.tpl.ckd"
             if src_musictrack.exists():
                 mt_text = src_musictrack.read_text(encoding="utf-8", errors="replace")
