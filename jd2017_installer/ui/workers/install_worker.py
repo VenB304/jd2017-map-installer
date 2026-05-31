@@ -126,7 +126,7 @@ class InstallWorker(QObject):
                 
                 self._log(logging.INFO, "Patching songdesc.tpl.ckd...")
                 sd_content = songdesc_path.read_bytes()
-                sd_text = sd_content.lstrip(b"\x00\xef\xbb\xbf").decode("utf-8", errors="replace")
+                sd_text = sd_content.lstrip(b"\x00\xef\xbb\xbf").decode("utf-8", errors="replace").strip('\x00\r\n\t ')
                 sd_json = json.loads(sd_text)
             else:
                 self._log(logging.INFO, "songdesc.tpl.ckd not found. Synthesizing from jdlo_metadata.json...")

@@ -97,20 +97,27 @@ def convert_texture_lossless(src_ckd_bytes: bytes) -> bytes:
         return wrap_dds_to_tga_ckd(payload)
 
     if fmt == 'xtx':
-        try:
-            from jd2017_installer.extractors.xtx_extractor import xtx_extract
-            nv = xtx_extract.readNv(payload)
-            if nv.numImages == 0:
-                raise TextureEncodingError("No images in XTX payload")
-            hdr, result = xtx_extract.get_deswizzled_data(0, nv)
-            dds_data = hdr
-            for mip in result:
-                dds_data += mip
+        import subprocess
+        import tempfile
+
+        xtx_exe = Path(__file__).resolve().parent.parent.parent / "Things" / "JDTools - 1.9.0" / "bin" / "xtx_extract.exe"
+        if not xtx_exe.exists():
+            raise TextureEncodingError(f"Missing XTX extractor at {xtx_exe}")
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_xtx = Path(tmp_dir) / "temp.xtx"
+            tmp_xtx.write_bytes(payload)
+
+            result = subprocess.run([str(xtx_exe), str(tmp_xtx)], capture_output=True)
+            if result.returncode != 0:
+                raise TextureEncodingError(f"xtx_extract failed: {result.stderr.decode(errors='replace')}")
+
+            tmp_dds = tmp_xtx.with_suffix(".dds")
+            if not tmp_dds.exists():
+                raise TextureEncodingError("xtx_extract did not produce a DDS file")
+            
+            dds_data = tmp_dds.read_bytes()
             return wrap_dds_to_tga_ckd(dds_data)
-        except ImportError:
-            raise TextureEncodingError(
-                "XTX texture conversion requires the xtx_extractor module"
-            )
 
     raise TextureEncodingError(f"Unsupported texture format encoding: {fmt}")
 

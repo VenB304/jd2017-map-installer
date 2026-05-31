@@ -37,7 +37,7 @@ def read_json_ckd(ckd_path: Path) -> dict[str, Any]:
     content = ckd_path.read_bytes()
 
     # Some CKD files may have a BOM or leading null bytes
-    text = content.lstrip(b"\x00\xef\xbb\xbf").decode("utf-8", errors="replace")
+    text = content.lstrip(b"\x00\xef\xbb\xbf").decode("utf-8", errors="replace").strip('\x00\r\n\t ')
 
     return json.loads(text)
 

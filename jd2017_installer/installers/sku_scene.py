@@ -18,13 +18,11 @@ from jd2017_installer.installers.ipk_packer import pack_folder_to_ipk, unpack_ip
 logger = logging.getLogger("jd2017.installers.sku_scene")
 
 # Actor XML template for SkuScene injection
-_ACTOR_TEMPLATE = """\t\t<ACTORS NAME="Actor">
-\t\t\t<Actor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="world/maps/{name}/songdesc.tpl">
+_ACTOR_TEMPLATE = """\t\t\t<Actor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="world/maps/{name}/songdesc.tpl">
 \t\t\t\t<COMPONENTS NAME="JD_SongDescComponent">
 \t\t\t\t\t<JD_SongDescComponent />
 \t\t\t\t</COMPONENTS>
-\t\t\t</Actor>
-\t\t</ACTORS>"""
+\t\t\t</Actor>"""
 
 # ISC files to patch
 _SKU_FILES = [
@@ -86,19 +84,14 @@ def _inject_actor_into_isc(isc_path: Path, codename: str) -> bool:
 
     actor_block = _ACTOR_TEMPLATE.format(codename=codename, name=codename.lower())
 
-    # Insert before the <sceneConfigs> block (which sits after the actor
-    # entries inside the <Scene> tag in real JD2017 ISC.CKD files).
-    insert_marker = "\t\t<sceneConfigs>"
+    # Insert before the </ACTORS> closing tag
+    insert_marker = "\t\t</ACTORS>"
     if insert_marker not in text:
         # Fallback: try without leading tabs
-        insert_marker = "<sceneConfigs>"
+        insert_marker = "</ACTORS>"
 
     if insert_marker not in text:
-        # Fallback 2: try before </Scene>
-        insert_marker = "</Scene>"
-
-    if insert_marker not in text:
-        raise ValueError(f"Could not find <sceneConfigs> or </Scene> insertion point in {isc_path.name}")
+        raise ValueError(f"Could not find </ACTORS> insertion point in {isc_path.name}")
 
     new_text = text.replace(insert_marker, f"{actor_block}\n{insert_marker}", 1)
 
@@ -180,7 +173,7 @@ def unregister_map(game_dir: Path, codename: str) -> None:
                     
                 # Regex to match the exact actor block for this codename
                 pattern = re.compile(
-                    rf'\t\t<ACTORS NAME="Actor">\s*<Actor[^>]*USERFRIENDLY="{re.escape(codename)}".*?</ACTORS>\r?\n?',
+                    rf'\t*\<Actor[^>]*USERFRIENDLY="{re.escape(codename)}".*?\</Actor\>\r?\n?',
                     re.DOTALL | re.IGNORECASE
                 )
                 new_text, count = pattern.subn("", text)

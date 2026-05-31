@@ -151,7 +151,7 @@ def normalize_musictrack(raw_mt: dict[str, Any]) -> dict[str, Any]:
 def load_and_normalize_songdesc_file(path: Path, codename: str) -> dict[str, Any]:
     """Load a songdesc JSON/CKD file and return normalized data."""
     content = path.read_bytes()
-    text = content.lstrip(b"\x00\xef\xbb\xbf").decode("utf-8", errors="replace")
+    text = content.lstrip(b"\x00\xef\xbb\xbf").decode("utf-8", errors="replace").strip('\x00\r\n\t ')
     raw = json.loads(text)
     return normalize_songdesc(raw, codename)
 
