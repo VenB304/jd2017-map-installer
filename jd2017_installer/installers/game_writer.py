@@ -376,14 +376,39 @@ def write_videoscoach_files(paths: dict[str, Path], codename: str) -> None:
     name = codename.lower()
     cache_vc = paths["cache_videoscoach"]
 
-    # Video ISC
+    # Video ISC (Matches official JD2017 PC structure exactly)
     (cache_vc / f"{name}_video.isc.ckd").write_text(f"""<?xml version="1.0" encoding="ISO-8859-1"?>
 <root>
 \t<Scene ENGINE_VERSION="{_ENGINE_VERSION}" GRIDUNIT="0.500000" DEPTH_SEPARATOR="0" NEAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" FAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" viewFamily="0">
 \t\t<ACTORS NAME="Actor">
-\t\t\t<Actor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}_VideoCoach" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="world/maps/{name}/videoscoach/{name}_videoscoach.tpl">
+\t\t\t<Actor RELATIVEZ="-1.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="VideoScreen" MARKER="" POS2D="0.000000 -4.500000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="world/_common/videoscreen/video_player_main.tpl">
 \t\t\t\t<COMPONENTS NAME="PleoComponent">
-\t\t\t\t\t<PleoComponent />
+\t\t\t\t\t<PleoComponent video="world/maps/{name}/videoscoach/{name}.webm" dashMPD="world/maps/{name}/videoscoach/{name}.mpd" channelID="" />
+\t\t\t\t</COMPONENTS>
+\t\t\t</Actor>
+\t\t</ACTORS>
+\t\t<ACTORS NAME="Actor">
+\t\t\t<Actor RELATIVEZ="0.000000" SCALE="3.941238 2.220000" xFLIPPED="0" USERFRIENDLY="VideoOutput" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="world/_common/videoscreen/video_output_main.tpl">
+\t\t\t\t<COMPONENTS NAME="PleoTextureGraphicComponent">
+\t\t\t\t\t<PleoTextureGraphicComponent colorComputerTagId="0" renderInTarget="0" disableLight="0" disableShadow="4294967295" AtlasIndex="0" customAnchor="0.000000 0.000000" SinusAmplitude="0.000000 0.000000 0.000000" SinusSpeed="1.000000" AngleX="0.000000" AngleY="0.000000" channelID="">
+\t\t\t\t\t\t<PrimitiveParameters>
+\t\t\t\t\t\t\t<GFXPrimitiveParam colorFactor="1.000000 1.000000 1.000000 1.000000">
+\t\t\t\t\t\t\t\t<ENUM NAME="gfxOccludeInfo" SEL="0" />
+\t\t\t\t\t\t\t</GFXPrimitiveParam>
+\t\t\t\t\t\t</PrimitiveParameters>
+\t\t\t\t\t\t<ENUM NAME="anchor" SEL="1" />
+\t\t\t\t\t\t<material>
+\t\t\t\t\t\t\t<GFXMaterialSerializable ATL_Channel="0" ATL_Path="" shaderPath="world/_common/matshader/pleofullscreen.msh" stencilTest="0" alphaTest="0" alphaRef="0">
+\t\t\t\t\t\t\t\t<textureSet>
+\t\t\t\t\t\t\t\t\t<GFXMaterialTexturePathSet diffuse="" back_light="" normal="" separateAlpha="" diffuse_2="" back_light_2="" anim_impostor="" diffuse_3="" diffuse_4="" />
+\t\t\t\t\t\t\t\t</textureSet>
+\t\t\t\t\t\t\t\t<materialParams>
+\t\t\t\t\t\t\t\t\t<GFXMaterialSerializableParam Reflector_factor="0.000000" />
+\t\t\t\t\t\t\t\t</materialParams>
+\t\t\t\t\t\t\t</GFXMaterialSerializable>
+\t\t\t\t\t\t</material>
+\t\t\t\t\t\t<ENUM NAME="oldAnchor" SEL="1" />
+\t\t\t\t\t</PleoTextureGraphicComponent>
 \t\t\t\t</COMPONENTS>
 \t\t\t</Actor>
 \t\t</ACTORS>
@@ -392,22 +417,6 @@ def write_videoscoach_files(paths: dict[str, Path], codename: str) -> None:
 \t\t</sceneConfigs>
 \t</Scene>
 </root>""", encoding="utf-8")
-
-    # Video TPL
-    video_tpl = {
-        "__class": "Actor_Template",
-        "WIP": 0, "LOWUPDATE": 0, "UPDATE_LAYER": 0,
-        "PROCEDURAL": 0, "STARTPAUSED": 0, "FORCEISENVIRONMENT": 0,
-        "COMPONENTS": [{
-            "__class": "PleoComponent_Template",
-            "video": f"world/maps/{name}/videoscoach/{name}.webm",
-            "dashMPD": f"world/maps/{name}/videoscoach/{name}.mpd",
-            "channelID": ""
-        }]
-    }
-    (cache_vc / f"{name}_videoscoach.tpl.ckd").write_text(
-        json.dumps(video_tpl, ensure_ascii=True), encoding="utf-8"
-    )
 
     # MPD CKD (binary DASH descriptor)
     write_mpd_ckd(codename, cache_vc / f"{name}.mpd.ckd")
@@ -461,7 +470,6 @@ def write_main_scene_isc(paths: dict[str, Path], codename: str) -> None:
     tml_scene = _get_embedded_scene(paths["cache_timeline"] / f"{name}_tml.isc.ckd")
     video_scene = _get_embedded_scene(paths["cache_videoscoach"] / f"{name}_video.isc.ckd")
     autodance_scene = _get_embedded_scene(paths["cache_autodance"] / f"{name}_autodance.isc.ckd")
-    menuart_scene = _get_embedded_scene(paths["cache_menuart"] / f"{name}_menuart.isc.ckd")
 
     (cache_root / f"{name}_main_scene.isc.ckd").write_text(f"""<?xml version="1.0" encoding="ISO-8859-1"?>
 <root>
@@ -516,14 +524,6 @@ def write_main_scene_isc(paths: dict[str, Path], codename: str) -> None:
 \t\t\t\t<ENUM NAME="viewType" SEL="2" />
 \t\t\t\t<SCENE>
 {autodance_scene}
-\t\t\t\t</SCENE>
-\t\t\t</SubSceneActor>
-\t\t</ACTORS>
-\t\t<ACTORS NAME="SubSceneActor">
-\t\t\t<SubSceneActor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}_menuart" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="enginedata/actortemplates/subscene.tpl" RELATIVEPATH="world/maps/{name}/menuart/{name}_menuart.isc" EMBED_SCENE="1" IS_SINGLE_PIECE="0" ZFORCED="1" DIRECT_PICKING="1" IGNORE_SAVE="0">
-\t\t\t\t<ENUM NAME="viewType" SEL="3" />
-\t\t\t\t<SCENE>
-{menuart_scene}
 \t\t\t\t</SCENE>
 \t\t\t</SubSceneActor>
 \t\t</ACTORS>

@@ -310,8 +310,20 @@ class InstallWorker(QObject):
                         if not target_path.exists():
                             shutil.copy2(ext_file, target_path)
                             self._log(logging.INFO, f"Copied raw image {ext_file.name} to {target_name} natively")
+                            
+                        # Compile to .tga.ckd for the cooked menuart directory (fix for 'X' indicator)
+                        ckd_name = f"{ext_file.stem.lower()}.tga.ckd"
+                        if "albumbbkg" in ckd_name:
+                            ckd_name = ckd_name.replace("albumbbkg", "albumbkg")
+                        ckd_path = menuart_dir / ckd_name
+                        if not ckd_path.exists():
+                            try:
+                                compile_image_to_tga_ckd(ext_file, ckd_path)
+                                self._log(logging.INFO, f"Compiled {ext_file.name} to {ckd_name} for menuart")
+                            except Exception as compile_e:
+                                self._log(logging.WARNING, f"Failed to compile {ext_file.name} to CKD: {compile_e}")
                     except Exception as e:
-                        self._log(logging.WARNING, f"Failed to copy raw image {ext_file.name}: {e}")
+                        self._log(logging.WARNING, f"Failed to process raw image {ext_file.name}: {e}")
                     
             # If a custom banner_bkg.dds is provided as per guide.md, wrap it to PC tga.ckd
             from jd2017_installer.installers.texture_encoder import wrap_dds_to_tga_ckd
