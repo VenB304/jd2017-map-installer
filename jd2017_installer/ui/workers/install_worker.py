@@ -270,6 +270,9 @@ class InstallWorker(QObject):
                             self._log(logging.WARNING, f"Failed to convert texture {file_path.name}: {e}")
                         
             menuart_dir = paths["cache_menuart_textures"]
+            from jd2017_installer.installers.texture_encoder import convert_texture_lossless, compile_image_to_tga_ckd
+            
+            # Process pre-compiled .tga.ckd files
             for ext_file in extracted_path.glob("*.tga.ckd"):
                 try:
                     raw = ext_file.read_bytes()
@@ -281,6 +284,23 @@ class InstallWorker(QObject):
                     (menuart_dir / target_name).write_bytes(converted)
                 except Exception as e:
                     self._log(logging.WARNING, f"Failed to convert menuart {ext_file.name}: {e}")
+            
+            # Process raw .png and .jpg files (HTML JDU maps)
+            for ext in ("*.png", "*.jpg", "*.jpeg"):
+                for ext_file in extracted_path.glob(ext):
+                    if "phone" in ext_file.name.lower():
+                        continue # Phones go uncooked, handled below
+                    try:
+                        target_name = f"{ext_file.stem.lower()}{ext_file.suffix.lower()}"
+                        if "albumbbkg" in target_name:
+                            target_name = target_name.replace("albumbbkg", "albumbkg")
+                        
+                        target_path = menuart_dir / target_name
+                        if not target_path.exists():
+                            shutil.copy2(ext_file, target_path)
+                            self._log(logging.INFO, f"Copied raw image {ext_file.name} to {target_name} natively")
+                    except Exception as e:
+                        self._log(logging.WARNING, f"Failed to copy raw image {ext_file.name}: {e}")
                     
             # If a custom banner_bkg.dds is provided as per guide.md, wrap it to PC tga.ckd
             from jd2017_installer.installers.texture_encoder import wrap_dds_to_tga_ckd
@@ -294,6 +314,19 @@ class InstallWorker(QObject):
                         self._log(logging.INFO, f"Successfully wrapped custom DDS banner {dds_file.name} to tga.ckd")
                     except Exception as e:
                         self._log(logging.WARNING, f"Failed to wrap custom DDS banner {dds_file.name}: {e}")
+            
+            # Patch SongDesc.tpl.ckd to point to .png instead of .tga for UI textures if they exist as .png
+            songdesc_path = paths["cache_root"] / "songdesc.tpl.ckd"
+            if songdesc_path.exists():
+                try:
+                    songdesc_bytes = songdesc_path.read_bytes()
+                    # Only replace .tga with .png if we actually copied .png files (we assume HTML source)
+                    if any(menuart_dir.glob("*.png")):
+                        songdesc_bytes = songdesc_bytes.replace(b".tga", b".png").replace(b".TGA", b".png")
+                        songdesc_path.write_bytes(songdesc_bytes)
+                        self._log(logging.INFO, "Patched songdesc.tpl.ckd to use .png MenuArt textures natively.")
+                except Exception as e:
+                    self._log(logging.WARNING, f"Failed to patch songdesc.tpl.ckd: {e}")
                         
             # Uncooked phone assets belong in world/maps/[codename]/menuart/textures/ as per guide.md (Lines 50-60)
             world_menuart_dir = paths["world_menuart_textures"]
@@ -306,7 +339,7 @@ class InstallWorker(QObject):
                         self._log(logging.WARNING, f"Failed to copy phone image {ext_img.name}: {e}")
                         
             # Phase 1 Fallback: banner_bkg generation
-            banner_dst = menuart_dir / f"{codename.lower()}_banner_bkg.tga.ckd"
+            banner_dst = menuart_dir / f"{codename.lower()}_banner_bkg.png"
             if not banner_dst.exists():
                 map_bkg_src = self.extractor.media_context.map_bkg_path if hasattr(self, "extractor") and hasattr(self.extractor, "media_context") else None
                 if not map_bkg_src or not map_bkg_src.exists():
@@ -324,15 +357,26 @@ class InstallWorker(QObject):
                                 break
                 if map_bkg_src and map_bkg_src.exists():
                     try:
-                        from jd2017_installer.installers.texture_encoder import create_banner_background_ckd
-                        create_banner_background_ckd(map_bkg_src, banner_dst)
-                        self._log(logging.INFO, f"Generated banner_bkg from map_bkg for '{codename}'")
+                        from PIL import Image, ImageChops, ImageOps
+                        bg_img = Image.open(map_bkg_src).convert("RGBA")
+                        bg_w, bg_h = bg_img.size
+                        scale = max(2048 / bg_w, 1024 / bg_h)
+                        new_w, new_h = int(bg_w * scale), int(bg_h * scale)
+                        bg_img = bg_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                        offset_x = (new_w - 2048) // 2
+                        offset_y = (new_h - 1024) // 2
+                        bg_img = bg_img.crop((offset_x, offset_y, offset_x + 2048, offset_y + 1024))
+                        greyscale = ImageOps.grayscale(bg_img).convert("RGBA")
+                        blue_layer = Image.new("RGBA", (2048, 1024), (0, 0, 255, 255))
+                        result = ImageChops.difference(greyscale, blue_layer)
+                        result.save(banner_dst, "PNG")
+                        self._log(logging.INFO, f"Generated banner_bkg natively as PNG for '{codename}'")
                     except Exception as e:
                         self._log(logging.WARNING, f"Failed to generate banner_bkg for '{codename}': {e}")
                 
                 # Ultimate fallback: just duplicate a background texture to prevent engine crash
                 if not banner_dst.exists():
-                    for fallback_name in (f"{codename.lower()}_map_bkg.tga.ckd", f"{codename.lower()}_cover_albumbkg.tga.ckd", f"{codename.lower()}_cover_generic.tga.ckd"):
+                    for fallback_name in (f"{codename.lower()}_map_bkg.png", f"{codename.lower()}_cover_albumbkg.png", f"{codename.lower()}_cover_generic.png"):
                         fallback_src = menuart_dir / fallback_name
                         if fallback_src.exists():
                             shutil.copy2(fallback_src, banner_dst)
@@ -345,10 +389,20 @@ class InstallWorker(QObject):
                 if "dance" in dtape_file.name.lower():
                     try:
                         dtape_bytes = dtape_file.read_bytes()
-                        if b".png" in dtape_bytes or b".PNG" in dtape_bytes:
+                        has_tga = False
+                        if (dst_timeline / "pictos").exists():
+                            has_tga = any((dst_timeline / "pictos").rglob("*.tga.ckd"))
+                            
+                        if has_tga and (b".png" in dtape_bytes or b".PNG" in dtape_bytes):
                             dtape_bytes = dtape_bytes.replace(b".png", b".tga").replace(b".PNG", b".tga")
                             dtape_file.write_bytes(dtape_bytes)
-                            self._log(logging.INFO, f"Patched picto paths in {dtape_file.name}")
+                            self._log(logging.INFO, f"Patched picto paths to .tga in {dtape_file.name}")
+                        elif b".tga" in dtape_bytes or b".TGA" in dtape_bytes:
+                            # If we only have .png pictos but dtape expects .tga (e.g. from a JDNext extraction that pre-patched it), revert it
+                            if not has_tga and any((dst_timeline / "pictos").rglob("*.png")):
+                                dtape_bytes = dtape_bytes.replace(b".tga", b".png").replace(b".TGA", b".png")
+                                dtape_file.write_bytes(dtape_bytes)
+                                self._log(logging.INFO, f"Patched picto paths to .png in {dtape_file.name}")
                     except Exception as e:
                         self._log(logging.WARNING, f"Failed to patch dtape '{dtape_file.name}': {e}")
 

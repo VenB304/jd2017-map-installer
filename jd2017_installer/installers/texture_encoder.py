@@ -29,7 +29,7 @@ _CKD_TEXTURE_HEADER = (
     b'\x00\x00\x00\x2C'  # Header size (44 bytes)
     b'\x00\x00\x20\x80'  # Flags / texture description
     b'\x01\x00\x01\x00'  # Width / Height placeholder markers
-    b'\x00\x01\x18\x00'  # DXT format identifiers
+    b'\x00\x01\x15\x00'  # DXT format identifiers (0x15 for uncompressed RGBA)
     b'\x00\x00\x20\x80'
     b'\x00\x00\x00\x00'
     b'\x00\x01\x00\x00'
@@ -140,7 +140,7 @@ def _build_uncompressed_dds(img: Image.Image) -> bytes:
 
     # 128-byte Standard DDS Header
     dds_header = struct.pack(
-        "<4sIIIIIII44sIIIIIIIIIIII",
+        "<4sIIIIIII44sIIIIIIIIIIIII",
         b"DDS ",             # Magic bytes
         124,                 # Header Size
         0x1 | 0x2 | 0x4 | 0x1000,  # Flags: CAPS, HEIGHT, WIDTH, PIXELFORMAT

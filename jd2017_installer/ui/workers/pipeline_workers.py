@@ -1857,8 +1857,12 @@ class BatchInstallWorker(QObject):
                             else:
                                 install_source_mode = "HTML JDNext" if bool(getattr(map_data, "is_jdnext_source", False)) else "HTML"
                         setattr(map_data, "_install_source_mode", install_source_mode)
-                        self._install_map_synchronously(map_data)
-                        emit_map_stage(2)
+                        
+                        def install_progress(percent: int):
+                            emit_map_stage(1.0 + (percent / 100.0) * 2.0)
+                            
+                        self._install_map_synchronously(map_data, progress_cb=install_progress)
+                        emit_map_stage(3.0)
                         
                         cb = self._config.cleanup_behavior
                         if cb in ("delete", "aggressive"):
@@ -1949,8 +1953,12 @@ class BatchInstallWorker(QObject):
                     else:
                         install_source_mode = "HTML JDNext" if source_game == "jdnext" else "HTML"
                     setattr(map_data, "_install_source_mode", install_source_mode)
-                    self._install_map_synchronously(map_data)
-                    emit_map_stage(2)
+                    
+                    def install_progress(percent: int):
+                        emit_map_stage(1.0 + (percent / 100.0) * 2.0)
+                        
+                    self._install_map_synchronously(map_data, progress_cb=install_progress)
+                    emit_map_stage(3.0)
                     
                     cb = self._config.cleanup_behavior
                     if cb in ("delete", "aggressive"):
@@ -1990,7 +1998,7 @@ class BatchInstallWorker(QObject):
             self.error.emit(str(e))
             self.finished.emit(False)
             
-    def _install_map_synchronously(self, map_data: NormalizedMapData) -> None:
+    def _install_map_synchronously(self, map_data: NormalizedMapData, progress_cb: Optional[Callable[[int], None]] = None) -> None:
         """Execute the same steps as InstallMapWorker.run() synchronously."""
         def callback(msg: str):
             prefix = f"[{map_data.codename}] "
@@ -2003,6 +2011,7 @@ class BatchInstallWorker(QObject):
             self._config,
             source_mode=source_mode,
             status_callback=callback,
+            progress_callback=progress_cb,
         )
 
 
@@ -2508,8 +2517,11 @@ def install_map_to_game(
 
         if status_callback: status_callback("Converting dance tapes...")
         if progress_callback: progress_callback(60)
-        from jd2017_installer.installers.tape_converter import auto_convert_tapes
-        auto_convert_tapes(map_data.source_dir, map_target, codename)
+        try:
+            from jd2017_installer.installers.tape_converter import auto_convert_tapes
+            auto_convert_tapes(map_data.source_dir, map_target, codename)
+        except ImportError:
+            logger.warning("tape_converter not found, skipping tape conversion.")
         
         # We don't have separate steps for Karaoke/Cinematic yet in logic, but status can reflect them
         if status_callback: status_callback("Converting karaoke tapes...")
@@ -2517,52 +2529,61 @@ def install_map_to_game(
         
         if status_callback: status_callback("Processing ambient sounds...")
         if progress_callback: progress_callback(70)
-        from jd2017_installer.installers.ambient_processor import process_ambient_directory
+        try:
+            from jd2017_installer.installers.ambient_processor import process_ambient_directory
 
-        source_is_html = bool(getattr(map_data, "is_html_source", False))
-        if not source_is_html and map_data.source_dir and map_data.source_dir.exists():
-            source_is_html = any(map_data.source_dir.glob("*.html")) or any(map_data.source_dir.glob("**/assets.html"))
+            source_is_html = bool(getattr(map_data, "is_html_source", False))
+            if not source_is_html and map_data.source_dir and map_data.source_dir.exists():
+                source_is_html = any(map_data.source_dir.glob("*.html")) or any(map_data.source_dir.glob("**/assets.html"))
 
-        normalize_intro_clip = source_is_jdnext
-        if not normalize_intro_clip and not _mainsequence_has_any_clip_entries(map_target, codename):
-            logger.warning(
-                "MainSequence has no clip entries for '%s'; enabling intro clip recovery injection.",
+            normalize_intro_clip = source_is_jdnext
+            if not normalize_intro_clip and not _mainsequence_has_any_clip_entries(map_target, codename):
+                logger.warning(
+                    "MainSequence has no clip entries for '%s'; enabling intro clip recovery injection.",
+                    codename,
+                )
+                normalize_intro_clip = True
+
+            process_ambient_directory(
+                map_data.source_dir,
+                map_target,
                 codename,
+                attempt_enabled=True,
+                normalize_intro_clip=normalize_intro_clip,
             )
-            normalize_intro_clip = True
-
-        process_ambient_directory(
-            map_data.source_dir,
-            map_target,
-            codename,
-            attempt_enabled=True,
-            normalize_intro_clip=normalize_intro_clip,
-        )
+        except ImportError:
+            logger.warning("ambient_processor not found, skipping ambient processing.")
         
-        if status_callback: status_callback("Decoding MenuArt textures...")
+        if status_callback: status_callback("Compiling MenuArt textures...")
         if progress_callback: progress_callback(80)
-        from jd2017_installer.installers.texture_decoder import decode_menuart_textures, decode_pictograms
-
-        menuart_sources = _collect_menuart_texture_sources(map_data.source_dir, codename)
-        installed_companions = _install_menuart_companion_assets(menuart_sources, map_target)
-        if installed_companions:
-            logger.debug(
-                "Installed %d MenuArt companion asset(s) (.act/.isc) from source payloads.",
-                installed_companions,
-            )
+        from jd2017_installer.installers.texture_encoder import compile_image_to_tga_ckd
         
-        # V1 Parity: Decode textures directly in the target directory 
-        # to handle loose assets copied from Fetch/HTML mode.
-        decoded_menuart = decode_menuart_textures(textures_dir, textures_dir)
+        # Compile any copied .png files in textures_dir to .tga.ckd natively
+        compiled_textures = 0
+        for png_file in textures_dir.glob("*.png"):
+            target_ckd = textures_dir / f"{png_file.stem.lower()}.tga.ckd"
+            if not target_ckd.exists():
+                try:
+                    compile_image_to_tga_ckd(png_file, target_ckd)
+                    compiled_textures += 1
+                except Exception as exc:
+                    logger.warning("Failed to compile texture %s: %s", png_file.name, exc)
+            png_file.unlink(missing_ok=True)
+            
+        for jpg_file in textures_dir.glob("*.jpg"):
+            target_ckd = textures_dir / f"{jpg_file.stem.lower()}.tga.ckd"
+            if not target_ckd.exists():
+                try:
+                    compile_image_to_tga_ckd(jpg_file, target_ckd)
+                    compiled_textures += 1
+                except Exception as exc:
+                    logger.warning("Failed to compile texture %s: %s", jpg_file.name, exc)
+            jpg_file.unlink(missing_ok=True)
 
-        if map_data.source_dir and map_data.source_dir.exists():
-            for menuart_src in menuart_sources:
-                decoded_menuart += decode_menuart_textures(menuart_src, textures_dir)
-
-        if decoded_menuart == 0:
-            logger.warning(
-                "No MenuArt textures decoded for '%s'. "
-                "Source may not include texture payloads.",
+        if compiled_textures > 0:
+            logger.debug(
+                "Compiled %d MenuArt texture(s) to .tga.ckd natively for '%s'.",
+                compiled_textures,
                 codename,
             )
 
