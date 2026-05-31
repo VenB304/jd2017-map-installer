@@ -306,7 +306,7 @@ class InstallWorker(QObject):
                         if "albumbbkg" in target_name:
                             target_name = target_name.replace("albumbbkg", "albumbkg")
                         
-                        target_path = menuart_dir / target_name
+                        target_path = paths["world_menuart_textures"] / target_name
                         if not target_path.exists():
                             shutil.copy2(ext_file, target_path)
                             self._log(logging.INFO, f"Copied raw image {ext_file.name} to {target_name} natively")
@@ -332,7 +332,7 @@ class InstallWorker(QObject):
                 try:
                     songdesc_bytes = songdesc_path.read_bytes()
                     # Only replace .tga with .png for files that actually exist as .png
-                    for png_file in menuart_dir.glob("*.png"):
+                    for png_file in paths["world_menuart_textures"].glob("*.png"):
                         tga_name = png_file.name.replace(".png", ".tga").encode("utf-8")
                         png_name = png_file.name.encode("utf-8")
                         songdesc_bytes = songdesc_bytes.replace(tga_name, png_name)
