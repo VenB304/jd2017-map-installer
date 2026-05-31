@@ -32,9 +32,52 @@ _IPK_VERSION = 5  # JD17 uses version 5
 _IPK_PLATFORM_PC = 8
 
 
-def _crc32_bytes(data: bytes) -> bytes:
-    """Compute CRC32 and return as 4 big-endian bytes."""
-    return (zlib.crc32(data) & 0xFFFFFFFF).to_bytes(4, "big")
+def _M32(n):
+    return n & 0xFFFFFFFF
+
+def _shifter(a, b, c):
+    a = _M32((a - b - c) ^ (c >> 13))
+    b = _M32((b - a - c) ^ (a << 8))
+    c = _M32((c - a - b) ^ (b >> 13))
+    a = _M32((a - c - b) ^ (c >> 12))
+    d = _M32((b - a - c) ^ (a << 16))
+    c = _M32((c - a - d) ^ (d >> 5))
+    a = _M32((a - c - d) ^ (c >> 3))
+    b = _M32((d - a - c) ^ (a << 10))
+    c = _M32((c - a - b) ^ (b >> 15))
+    return a, b, c
+
+def string_id_bytes(path_str: str) -> bytes:
+    """Compute UbiArt StringID (Jenkins hash) of the uppercase path string."""
+    data = path_str.upper().encode("utf-8")
+    a = b = 0x9E3779B9
+    c = 0
+    length = len(data)
+    i = 0
+    while length >= 12:
+        a = _M32(a + (data[i] + (data[i+1] << 8) + (data[i+2] << 16) + (data[i+3] << 24)))
+        b = _M32(b + (data[i+4] + (data[i+5] << 8) + (data[i+6] << 16) + (data[i+7] << 24)))
+        c = _M32(c + (data[i+8] + (data[i+9] << 8) + (data[i+10] << 16) + (data[i+11] << 24)))
+        a, b, c = _shifter(a, b, c)
+        i += 12
+        length -= 12
+        
+    c = _M32(c + len(data))
+    
+    if length >= 11: c = _M32(c + (data[i+10] << 24))
+    if length >= 10: c = _M32(c + (data[i+9] << 16))
+    if length >= 9:  c = _M32(c + (data[i+8] << 8))
+    if length >= 8:  b = _M32(b + (data[i+7] << 24))
+    if length >= 7:  b = _M32(b + (data[i+6] << 16))
+    if length >= 6:  b = _M32(b + (data[i+5] << 8))
+    if length >= 5:  b = _M32(b + data[i+4])
+    if length >= 4:  a = _M32(a + (data[i+3] << 24))
+    if length >= 3:  a = _M32(a + (data[i+2] << 16))
+    if length >= 2:  a = _M32(a + (data[i+1] << 8))
+    if length >= 1:  a = _M32(a + data[i])
+    
+    a, b, c = _shifter(a, b, c)
+    return c.to_bytes(4, "big")
 
 
 def pack_folder_to_ipk(source_dir: Path, output_ipk: Path) -> None:
@@ -78,7 +121,7 @@ def pack_folder_to_ipk(source_dir: Path, output_ipk: Path) -> None:
             "file_name_bytes": file_name_bytes,
             "path_name_bytes": path_name_bytes,
             "size": len(file_bytes),
-            "crc": _crc32_bytes(file_bytes),
+            "crc": string_id_bytes(path_name + file_name),
         })
         file_data_list.append(file_bytes)
 
