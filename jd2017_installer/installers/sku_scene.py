@@ -18,15 +18,18 @@ from jd2017_installer.installers.ipk_packer import pack_folder_to_ipk, unpack_ip
 logger = logging.getLogger("jd2017.installers.sku_scene")
 
 # Actor XML template for SkuScene injection
-_ACTOR_TEMPLATE = """\t\t\t<Actor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="world/maps/{name}/songdesc.tpl">
+_ACTOR_TEMPLATE = """\t\t<ACTORS NAME="Actor">
+\t\t\t<Actor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="world/maps/{name}/songdesc.tpl">
 \t\t\t\t<COMPONENTS NAME="JD_SongDescComponent">
 \t\t\t\t\t<JD_SongDescComponent />
 \t\t\t\t</COMPONENTS>
-\t\t\t</Actor>"""
+\t\t\t</Actor>
+\t\t</ACTORS>"""
 
 # ISC files to patch
 _SKU_FILES = [
     "cache/itf_cooked/pc/world/skuscenes/skuscene_maps_pc_all.isc.ckd",
+    "cache/itf_cooked/pc/world/skuscenes/skuscene_maps_pc_ww.isc.ckd",
 ]
 
 
@@ -83,14 +86,14 @@ def _inject_actor_into_isc(isc_path: Path, codename: str) -> bool:
 
     actor_block = _ACTOR_TEMPLATE.format(codename=codename, name=codename.lower())
 
-    # Insert before the </ACTORS> closing tag
-    insert_marker = "\t\t</ACTORS>"
+    # Insert before the <sceneConfigs> tag
+    insert_marker = "\t\t<sceneConfigs>"
     if insert_marker not in text:
         # Fallback: try without leading tabs
-        insert_marker = "</ACTORS>"
+        insert_marker = "<sceneConfigs>"
 
     if insert_marker not in text:
-        raise ValueError(f"Could not find </ACTORS> insertion point in {isc_path.name}")
+        raise ValueError(f"Could not find <sceneConfigs> insertion point in {isc_path.name}")
 
     new_text = text.replace(insert_marker, f"{actor_block}\n{insert_marker}", 1)
 
@@ -229,12 +232,15 @@ def patch_sku_scenes(game_dir: Path | str, codenames: list[str] | str) -> None:
         injected_any = False
         for sku_rel_path in _SKU_FILES:
             isc_path = extract_dir / sku_rel_path
-            if isc_path.exists():
-                for codename in codenames:
-                    if _inject_actor_into_isc(isc_path, codename):
-                        injected_any = True
-            else:
-                logger.warning("SKU file not found: %s", sku_rel_path)
+            if not isc_path.exists():
+                logger.info("SKU file not found, creating new: %s", sku_rel_path)
+                isc_path.parent.mkdir(parents=True, exist_ok=True)
+                sku = "jd2017-pc-all" if "all" in isc_path.name.lower() else "jd2017-pc-ww"
+                isc_path.write_text(_BLANK_SKUSCENE_XML.format(sku=sku), encoding="utf-8")
+                
+            for codename in codenames:
+                if _inject_actor_into_isc(isc_path, codename):
+                    injected_any = True
 
         if not injected_any:
             logger.info("No new injections needed for '%s'", codenames)

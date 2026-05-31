@@ -117,14 +117,14 @@ class InstallWorker(QObject):
             # Read normalized data to get num_coach
             from jd2017_installer.parsers.normalizer import load_and_normalize_songdesc_file
             
-            # Find the songdesc.tpl.ckd in extracted dir
+            # Find the cache world root
             extracted_world = extracted_path / "cache" / "itf_cooked" / "pc" / "world" / "maps" / codename.lower()
             if not extracted_world.exists():
-                matches = list(extracted_path.rglob("songdesc.tpl.ckd"))
+                matches = list(extracted_path.rglob(f"{codename.lower()}_tml_dance.dtape.ckd"))
                 if matches:
-                    extracted_world = matches[0].parent
+                    extracted_world = matches[0].parent.parent
                 else:
-                    raise ValueError("Could not find extracted map data (songdesc.tpl.ckd).")
+                    self._log(logging.WARNING, "Could not reliably locate map cache root; assuming standard path.")
                     
             songdesc_path = extracted_world / "songdesc.tpl.ckd"
             if songdesc_path.exists():
@@ -136,11 +136,20 @@ class InstallWorker(QObject):
                 sd_text = sd_content.lstrip(b"\x00\xef\xbb\xbf").decode("utf-8", errors="replace").strip('\x00\r\n\t ')
                 sd_json = json.loads(sd_text)
             else:
-                self._log(logging.INFO, "songdesc.tpl.ckd not found. Synthesizing from jdlo_metadata.json...")
+                self._log(logging.INFO, "songdesc.tpl.ckd not found. Synthesizing metadata...")
                 jdlo_meta_path = extracted_path / "jdlo_metadata.json"
                 if not jdlo_meta_path.exists():
-                    raise ValueError(f"Missing songdesc.tpl.ckd and no fallback metadata found in {extracted_path}")
-                jdlo_meta = json.loads(jdlo_meta_path.read_text(encoding="utf-8"))
+                    import re
+                    coach_files = list(extracted_path.rglob(f"{codename.lower()}_coach_*.tga.ckd")) + list(extracted_path.rglob(f"{codename.lower()}_coach_*.png.ckd"))
+                    inferred_coach = 1
+                    for cf in coach_files:
+                        m = re.search(r"coach_(\d+)", cf.name.lower())
+                        if m: inferred_coach = max(inferred_coach, int(m.group(1)))
+                    self._log(logging.INFO, f"Inferred {inferred_coach} coaches from textures.")
+                    jdlo_meta = {"coachCount": inferred_coach}
+                else:
+                    jdlo_meta = json.loads(jdlo_meta_path.read_text(encoding="utf-8"))
+                
                 num_coach = jdlo_meta.get("coachCount", 1)
                 
                 sd_json = {
