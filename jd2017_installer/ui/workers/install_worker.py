@@ -260,14 +260,21 @@ class InstallWorker(QObject):
                 try:
                     raw = ext_file.read_bytes()
                     converted = convert_texture_lossless(raw)
-                    (menuart_dir / ext_file.name).write_bytes(converted)
+                    # Correct single 'b' to double 'b' for expand background as per guide.md
+                    target_name = ext_file.name
+                    if target_name.endswith("_cover_albumbkg.tga.ckd"):
+                        target_name = target_name.replace("_cover_albumbkg.tga.ckd", "_cover_albumbbkg.tga.ckd")
+                    (menuart_dir / target_name).write_bytes(converted)
                 except Exception as e:
                     self._log(logging.WARNING, f"Failed to convert menuart {ext_file.name}: {e}")
                     
+            # Uncooked phone assets belong in world/maps/[codename]/menuart/textures/ as per guide.md (Lines 50-60)
+            world_menuart_dir = paths["world_menuart_textures"]
             for ext_img in extracted_path.glob("*_phone.*"):
                 if ext_img.suffix.lower() in (".png", ".jpg", ".jpeg"):
                     try:
-                        shutil.copy2(ext_img, menuart_dir / ext_img.name)
+                        shutil.copy2(ext_img, world_menuart_dir / ext_img.name)
+                        self._log(logging.INFO, f"Copied phone image {ext_img.name} to uncooked menuart textures")
                     except Exception as e:
                         self._log(logging.WARNING, f"Failed to copy phone image {ext_img.name}: {e}")
                         

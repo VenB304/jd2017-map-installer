@@ -15,7 +15,6 @@ import logging
 from pathlib import Path
 
 from jd2017_installer.installers.binary_generators import (
-    write_actor_ckd,
     write_mpd_ckd,
 )
 
@@ -56,6 +55,8 @@ def setup_dirs(output_root: Path, codename: str) -> dict[str, Path]:
         "world_autodance": world_base / "autodance",
         "world_timeline_moves": world_base / "timeline" / "moves" / "wiiu",
         "world_videoscoach": world_base / "videoscoach",
+        "world_menuart": world_base / "menuart",
+        "world_menuart_textures": world_base / "menuart" / "textures",
     }
 
     for p in paths.values():
@@ -250,9 +251,9 @@ def write_menuart_isc(paths: dict[str, Path], codename: str, num_coach: int) -> 
     # Album coach
     actors.append(_build_menuart_actor_block(
         codename, "cover_albumcoach", pos2d="738.106323 359.612030", anchor_sel="6"))
-    # Album background (single 'b' spelling)
+    # Album background (double 'b' spelling as per guide.md)
     actors.append(_build_menuart_actor_block(
-        codename, "cover_albumbkg", pos2d="1067.972168 201.986328"))
+        codename, "cover_albumbbkg", pos2d="1067.972168 201.986328"))
     # Coach textures
     for i in range(1, num_coach + 1):
         actors.append(_build_menuart_actor_block(
@@ -276,24 +277,6 @@ def write_menuart_isc(paths: dict[str, Path], codename: str, num_coach: int) -> 
 \t</Scene>
 </root>""", encoding="utf-8")
 
-
-def write_menuart_actor_ckds(paths: dict[str, Path], codename: str, num_coach: int) -> None:
-    """Generate binary .act.ckd files for all menuart texture assets."""
-    name = codename.lower()
-    actors_dir = paths["cache_menuart_actors"]
-
-    texture_names = [
-        f"{name}_cover_generic",
-        f"{name}_cover_online",
-        f"{name}_cover_albumcoach",
-        f"{name}_cover_albumbkg",
-        f"{name}_banner_bkg",
-    ]
-    for i in range(1, num_coach + 1):
-        texture_names.append(f"{name}_coach_{i}")
-
-    for tex_name in texture_names:
-        write_actor_ckd(name, tex_name, actors_dir / f"{tex_name}.act.ckd")
 
 
 def write_timeline_isc(paths: dict[str, Path], codename: str) -> None:
@@ -475,6 +458,11 @@ def write_main_scene_isc(paths: dict[str, Path], codename: str) -> None:
 \t</Scene>
 </root>""", encoding="utf-8")
 
+    (cache_root / f"{name}_main_scene.sgs.ckd").write_text(
+        'S{"settings":{"__class":"JD_MapSceneConfig","Pause_Level":6,"name":"","type":1,"musicscore":2,"soundContext":"","hud":0,"phoneTitleLocId":4294967295,"phoneImage":""}}',
+        encoding="utf-8"
+    )
+
 def write_game_files(*args, **kwargs): pass
 def clean_orphaned_map_files(*args, **kwargs): pass
 def is_map_installed(*args, **kwargs): return False
@@ -506,7 +494,6 @@ def generate_all_scenes(output_root: Path, codename: str, num_coach: int = 1) ->
     write_videoscoach_files(paths, codename)
     write_autodance_files(paths, codename)
     write_menuart_isc(paths, codename, num_coach)
-    write_menuart_actor_ckds(paths, codename, num_coach)
     write_main_scene_isc(paths, codename)
 
     logger.info("PC MainScene generation complete for '%s'", codename)

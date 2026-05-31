@@ -198,10 +198,14 @@ def _optional_items(base_dir: Path, codename: str) -> list[InstallChecklistItem]
                 for rel in [
                     f"menuart/textures/{codename}_cover_albumbkg.png",
                     f"menuart/textures/{codename}_cover_albumbkg.tga",
+                    f"menuart/textures/{codename}_cover_albumbbkg.png",
+                    f"menuart/textures/{codename}_cover_albumbbkg.tga",
                     f"menuart/textures/{codename}_cover_albumcoach.png",
                     f"menuart/textures/{codename}_cover_albumcoach.tga",
                     f"MenuArt/textures/{codename}_cover_albumbkg.png",
                     f"MenuArt/textures/{codename}_cover_albumbkg.tga",
+                    f"MenuArt/textures/{codename}_cover_albumbbkg.png",
+                    f"MenuArt/textures/{codename}_cover_albumbbkg.tga",
                     f"MenuArt/textures/{codename}_cover_albumcoach.png",
                     f"MenuArt/textures/{codename}_cover_albumcoach.tga",
                 ]

@@ -27,7 +27,6 @@ _ACTOR_TEMPLATE = """\t\t\t<Actor RELATIVEZ="0.000000" SCALE="1.000000 1.000000"
 # ISC files to patch
 _SKU_FILES = [
     "cache/itf_cooked/pc/world/skuscenes/skuscene_maps_pc_all.isc.ckd",
-    "cache/itf_cooked/pc/world/skuscenes/skuscene_maps_pc_ww.isc.ckd",
 ]
 
 
