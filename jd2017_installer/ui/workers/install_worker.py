@@ -78,6 +78,15 @@ class InstallWorker(QObject):
         extract_dir = temp_dir / "extracted"
         build_dir = temp_dir / "build"
         
+        # Clear temp directories from previous installs
+        if extract_dir.exists():
+            shutil.rmtree(extract_dir)
+        if build_dir.exists():
+            shutil.rmtree(build_dir)
+            
+        extract_dir.mkdir(parents=True, exist_ok=True)
+        build_dir.mkdir(parents=True, exist_ok=True)
+        
         try:
             if not self.config.game_directory:
                 raise ValueError("Game directory is not configured.")
@@ -107,8 +116,6 @@ class InstallWorker(QObject):
             
             # Read normalized data to get num_coach
             from jd2017_installer.parsers.normalizer import load_and_normalize_songdesc_file
-            import shutil
-            import json
             
             # Find the songdesc.tpl.ckd in extracted dir
             extracted_world = extracted_path / "cache" / "itf_cooked" / "pc" / "world" / "maps" / codename.lower()
@@ -187,28 +194,40 @@ class InstallWorker(QObject):
             build_songdesc.parent.mkdir(parents=True, exist_ok=True)
             build_songdesc.write_text(json.dumps(sd_json, ensure_ascii=True), encoding="utf-8")
             
-            # 2. Copy timeline and autodance from extracted
-            self._log(logging.INFO, "Copying timeline, autodance, cinematics, and graph logic...")
+            # 2. Copy timeline and autodance from extracted based STRICTLY on guide.md
+            self._log(logging.INFO, "Copying timeline and autodance based on guide.md...")
             
+            # Guide Line 44: merge the unpacked main scene's world/maps/[codename] autodance and timeline folders
+            src_uncooked_world = extracted_path / "world" / "maps" / codename.lower()
+            dst_uncooked_world = paths["world_root"]
+            if (src_uncooked_world / "timeline").exists():
+                shutil.copytree(src_uncooked_world / "timeline", dst_uncooked_world / "timeline", dirs_exist_ok=True)
+            if (src_uncooked_world / "autodance").exists():
+                shutil.copytree(src_uncooked_world / "autodance", dst_uncooked_world / "autodance", dirs_exist_ok=True)
+            
+            # Guide Line 65: copy pictos folder, dtape.ckd, ktape.ckd from cache/.../timeline/
             src_timeline = extracted_world / "timeline"
             dst_timeline = paths["cache_timeline"]
-            if src_timeline.exists():
-                shutil.copytree(src_timeline, dst_timeline, dirs_exist_ok=True)
+            
+            if (src_timeline / "pictos").exists():
+                shutil.copytree(src_timeline / "pictos", dst_timeline / "pictos", dirs_exist_ok=True)
                 
-            src_autodance = extracted_world / "autodance"
-            dst_autodance = paths["cache_autodance"]
-            if src_autodance.exists():
-                shutil.copytree(src_autodance, dst_autodance, dirs_exist_ok=True)
-
-            src_cine = extracted_world / "cinematics"
-            dst_cine = paths["cache_cinematics"]
-            if src_cine.exists():
-                shutil.copytree(src_cine, dst_cine, dirs_exist_ok=True)
-
-            src_graph = extracted_world / "graph"
-            dst_graph = paths["cache_graph"]
-            if src_graph.exists():
-                shutil.copytree(src_graph, dst_graph, dirs_exist_ok=True)
+            dtape_src = src_timeline / f"{codename.lower()}_tml_dance.dtape.ckd"
+            if dtape_src.exists():
+                shutil.copy2(dtape_src, dst_timeline / f"{codename.lower()}_tml_dance.dtape.ckd")
+            else:
+                # Handle alternative naming
+                dtape_src_dot = src_timeline / f"{codename.lower()}_tml.dance.dtape.ckd"
+                if dtape_src_dot.exists():
+                    shutil.copy2(dtape_src_dot, dst_timeline / f"{codename.lower()}_tml_dance.dtape.ckd")
+                    
+            ktape_src = src_timeline / f"{codename.lower()}_tml_karaoke.ktape.ckd"
+            if ktape_src.exists():
+                shutil.copy2(ktape_src, dst_timeline / f"{codename.lower()}_tml_karaoke.ktape.ckd")
+            else:
+                ktape_src_dot = src_timeline / f"{codename.lower()}_tml.karaoke.ktape.ckd"
+                if ktape_src_dot.exists():
+                    shutil.copy2(ktape_src_dot, dst_timeline / f"{codename.lower()}_tml_karaoke.ktape.ckd")
                 
             self._log(logging.INFO, "Normalizing textures (lossless CKD conversion)...")
             from jd2017_installer.installers.texture_encoder import convert_texture_lossless, TextureEncodingError
@@ -298,7 +317,7 @@ class InstallWorker(QObject):
             # 5. Copy media assets to world directories
             self._log(logging.INFO, "Copying media assets (audio/video)...")
             audio_dst = paths["world_audio"] / f"{codename.lower()}.ogg"
-            video_dst = paths["world_videoscoach"] / f"{codename.lower()}.webm"
+            video_dst = paths["world_videoscoach"] / f"{codename.lower()}.vp8"
             
             ogg_candidates = list(extracted_path.glob("*.ogg"))
             if ogg_candidates:

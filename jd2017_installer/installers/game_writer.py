@@ -469,10 +469,10 @@ def write_main_scene_isc(paths: dict[str, Path], codename: str) -> None:
 \t\t\t\t</COMPONENTS>
 \t\t\t</Actor>
 \t\t</ACTORS>
-		<sceneConfigs>
-			<SceneConfigs activeSceneConfig="0" />
-		</sceneConfigs>
-	</Scene>
+\t\t<sceneConfigs>
+\t\t\t<SceneConfigs activeSceneConfig="0" />
+\t\t</sceneConfigs>
+\t</Scene>
 </root>""", encoding="utf-8")
 
 def write_game_files(*args, **kwargs): pass
