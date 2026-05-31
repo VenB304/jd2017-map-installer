@@ -83,6 +83,224 @@ def write_actor_ckd(codename: str, texture_name: str, output_path: Path) -> None
     logger.debug("Generated actor CKD: %s (%d bytes)", output_path.name, len(data))
 
 
+def generate_autodance_act_ckd(codename: str) -> bytes:
+    """Generate the binary payload of a UbiArt autodance actor (.act.ckd) for PC.
+
+    Args:
+        codename: The lowercase map name (e.g. 'dontwannaknow').
+
+    Returns:
+        The complete binary content of the .act.ckd file.
+    """
+    prefix = (
+        b'\x00\x00\x00\x01\x00\x00\x00\x00\x3F\x80\x00\x00\x3F\x80\x00\x00'
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xFF\xFF\xFF\xFF'
+        b'\x00\x00\x00\x00'
+    )
+    tpl_filename = f"{codename.lower()}_autodance.tpl".encode()
+    tpl_len = len(tpl_filename).to_bytes(4, "big")
+
+    path_str = f"world/maps/{codename.lower()}/autodance/".encode()
+    path_len = len(path_str).to_bytes(4, "big")
+
+    file_hash = random.randint(1000000000, 4000000000).to_bytes(4, "big")
+    suffix = b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x67\xB8\xBB\x77'
+
+    return prefix + tpl_len + tpl_filename + path_len + path_str + file_hash + suffix
+
+
+def write_autodance_act_ckd(codename: str, output_path: Path) -> None:
+    """Generate and write the autodance actor .act.ckd file.
+
+    Args:
+        codename: The lowercase map codename.
+        output_path: Output file path.
+    """
+    data = generate_autodance_act_ckd(codename)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(data)
+    logger.debug("Generated autodance actor CKD: %s (%d bytes)", output_path.name, len(data))
+
+
+def generate_dance_act_ckd(codename: str) -> bytes:
+    """Generate the binary payload of a UbiArt dance timeline actor (.act.ckd) for PC.
+
+    Args:
+        codename: The lowercase map name (e.g. 'dontwannaknow').
+
+    Returns:
+        The complete binary content of the .act.ckd file.
+    """
+    prefix = (
+        b'\x00\x00\x00\x01\x00\x00\x00\x00\x3F\x80\x00\x00\x3F\x80\x00\x00'
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xFF\xFF\xFF\xFF'
+        b'\x00\x00\x00\x00'
+    )
+    tpl_filename = f"{codename.lower()}_tml_dance.tpl".encode()
+    tpl_len = len(tpl_filename).to_bytes(4, "big")
+
+    path_str = f"world/maps/{codename.lower()}/timeline/".encode()
+    path_len = len(path_str).to_bytes(4, "big")
+
+    file_hash = random.randint(1000000000, 4000000000).to_bytes(4, "big")
+    suffix = b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x23\x1F\x27\xDE'
+
+    return prefix + tpl_len + tpl_filename + path_len + path_str + file_hash + suffix
+
+
+def write_dance_act_ckd(codename: str, output_path: Path) -> None:
+    """Generate and write the timeline dance actor .act.ckd file.
+
+    Args:
+        codename: The lowercase map codename.
+        output_path: Output file path.
+    """
+    data = generate_dance_act_ckd(codename)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(data)
+    logger.debug("Generated timeline dance actor CKD: %s (%d bytes)", output_path.name, len(data))
+
+
+def generate_karaoke_act_ckd(codename: str) -> bytes:
+    """Generate the binary payload of a UbiArt karaoke timeline actor (.act.ckd) for PC.
+
+    Args:
+        codename: The lowercase map name (e.g. 'dontwannaknow').
+
+    Returns:
+        The complete binary content of the .act.ckd file.
+    """
+    prefix = (
+        b'\x00\x00\x00\x01\x00\x00\x00\x00\x3F\x80\x00\x00\x3F\x80\x00\x00'
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xFF\xFF\xFF\xFF'
+        b'\x00\x00\x00\x00'
+    )
+    tpl_filename = f"{codename.lower()}_tml_karaoke.tpl".encode()
+    tpl_len = len(tpl_filename).to_bytes(4, "big")
+
+    path_str = f"world/maps/{codename.lower()}/timeline/".encode()
+    path_len = len(path_str).to_bytes(4, "big")
+
+    file_hash = random.randint(1000000000, 4000000000).to_bytes(4, "big")
+    suffix = b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x23\x1F\x27\xDE'
+
+    return prefix + tpl_len + tpl_filename + path_len + path_str + file_hash + suffix
+
+
+def write_karaoke_act_ckd(codename: str, output_path: Path) -> None:
+    """Generate and write the timeline karaoke actor .act.ckd file.
+
+    Args:
+        codename: The lowercase map codename.
+        output_path: Output file path.
+    """
+    data = generate_karaoke_act_ckd(codename)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(data)
+    logger.debug("Generated timeline karaoke actor CKD: %s (%d bytes)", output_path.name, len(data))
+
+
+def generate_videoscoach_act_ckd(codename: str) -> bytes:
+    """Generate the binary payload of a UbiArt videoscoach actor (.act.ckd) for PC.
+
+    Args:
+        codename: The lowercase map name.
+
+    Returns:
+        The complete binary content of the .act.ckd file.
+    """
+    prefix = (
+        b'\x00\x00\x00\x01\x00\x00\x00\x00\x3F\x80\x00\x00\x3F\x80\x00\x00'
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xFF\xFF\xFF\xFF'
+        b'\x00\x00\x00\x00\x00\x00\x00\x15\x76\x69\x64\x65\x6F\x5F\x70\x6C'
+        b'\x61\x79\x65\x72\x5F\x6D\x61\x69\x6E\x2E\x74\x70\x6C\x00\x00\x00'
+        b'\x1A\x77\x6F\x72\x6C\x64\x2F\x5F\x63\x6F\x6D\x6D\x6F\x6E\x2F\x76'
+        b'\x69\x64\x65\x6F\x73\x63\x72\x65\x65\x6E\x2F\xF5\xD5\xE8\xF2\x00'
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x12\x63\xDA\xD9'
+    )
+
+    webm_filename = f"{codename.lower()}.webm".encode()
+    webm_len = len(webm_filename).to_bytes(4, "big")
+
+    mpd_filename = f"{codename.lower()}.mpd".encode()
+    mpd_len = len(mpd_filename).to_bytes(4, "big")
+
+    path_str = f"world/maps/{codename.lower()}/videoscoach/".encode()
+    path_len = len(path_str).to_bytes(4, "big")
+
+    file_hash1 = random.randint(1000000000, 4000000000).to_bytes(4, "big")
+    file_hash2 = random.randint(1000000000, 4000000000).to_bytes(4, "big")
+
+    return (
+        prefix
+        + webm_len + webm_filename
+        + path_len + path_str
+        + file_hash1
+        + b'\x00\x00\x00\x00'
+        + mpd_len + mpd_filename
+        + path_len + path_str
+        + file_hash2
+        + b'\x00\x00\x00\x00\x00\x00\x00\x00'
+    )
+
+
+def write_videoscoach_act_ckd(codename: str, output_path: Path) -> None:
+    """Generate and write the videoscoach actor .act.ckd file.
+
+    Args:
+        codename: The lowercase map codename.
+        output_path: Output file path.
+    """
+    data = generate_videoscoach_act_ckd(codename)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(data)
+    logger.debug("Generated videoscoach actor CKD: %s (%d bytes)", output_path.name, len(data))
+
+
+def generate_songdesc_act_ckd(codename: str) -> bytes:
+    """Generate the binary payload of a UbiArt songdesc actor (.act.ckd) for PC.
+
+    Args:
+        codename: The lowercase map name (e.g. 'dontwannaknow').
+
+    Returns:
+        The complete binary content of the .act.ckd file.
+    """
+    prefix = (
+        b'\x00\x00\x00\x01\x00\x00\x00\x00\x3F\x80\x00\x00\x3F\x80\x00\x00'
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+        b'\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+        b'\x00\x00\x00\x00\x00\x00\xFF\xFF\xFF\xFF\x00\x00\x00\x00\x00\x00'
+        b'\x00\x0C\x73\x6F\x6E\x67\x64\x65\x73\x63\x2E\x74\x70\x6C'
+    )
+
+    path_str = f"world/maps/{codename.lower()}/".encode()
+    path_len = len(path_str).to_bytes(4, "big")
+
+    file_hash = random.randint(1000000000, 4000000000).to_bytes(4, "big")
+    suffix = b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\xE0\x7F\xCC\x3F'
+
+    return prefix + path_len + path_str + file_hash + suffix
+
+
+def write_songdesc_act_ckd(codename: str, output_path: Path) -> None:
+    """Generate and write the songdesc actor .act.ckd file.
+
+    Args:
+        codename: The lowercase map codename.
+        output_path: Output file path.
+    """
+    data = generate_songdesc_act_ckd(codename)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(data)
+    logger.debug("Generated songdesc actor CKD: %s (%d bytes)", output_path.name, len(data))
+
+
+
 def generate_mpd_ckd(codename: str) -> bytes:
     """Generate the binary playback DASH descriptor (.mpd.ckd) for PC.
 

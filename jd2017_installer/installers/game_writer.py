@@ -16,6 +16,12 @@ from pathlib import Path
 
 from jd2017_installer.installers.binary_generators import (
     write_mpd_ckd,
+    write_actor_ckd,
+    write_autodance_act_ckd,
+    write_dance_act_ckd,
+    write_karaoke_act_ckd,
+    write_videoscoach_act_ckd,
+    write_songdesc_act_ckd,
 )
 
 logger = logging.getLogger("jd2017.installers.game_writer")
@@ -277,6 +283,16 @@ def write_menuart_isc(paths: dict[str, Path], codename: str, num_coach: int) -> 
 \t</Scene>
 </root>""", encoding="utf-8")
 
+    # Generate texture actor (.act.ckd) files in cache_menuart_actors
+    cache_actors = paths["cache_menuart_actors"]
+    write_actor_ckd(codename, f"{name}_cover_albumcoach", cache_actors / f"{name}_cover_albumcoach.act.ckd")
+    write_actor_ckd(codename, f"{name}_banner_bkg", cache_actors / f"{name}_banner_bkg.act.ckd")
+    write_actor_ckd(codename, f"{name}_cover_generic", cache_actors / f"{name}_cover_generic.act.ckd")
+    write_actor_ckd(codename, f"{name}_cover_online", cache_actors / f"{name}_cover_online.act.ckd")
+    write_actor_ckd(codename, f"{name}_cover_albumbkg", cache_actors / f"{name}_cover_albumbkg.act.ckd")
+    for i in range(1, num_coach + 1):
+        write_actor_ckd(codename, f"{name}_coach_{i}", cache_actors / f"{name}_coach_{i}.act.ckd")
+
 
 
 def write_timeline_isc(paths: dict[str, Path], codename: str) -> None:
@@ -350,6 +366,10 @@ def write_timeline_isc(paths: dict[str, Path], codename: str) -> None:
 \t</Scene>
 </root>""", encoding="utf-8")
 
+    # Generate timeline binary actors
+    write_dance_act_ckd(codename, cache_tml / f"{name}_tml_dance.act.ckd")
+    write_karaoke_act_ckd(codename, cache_tml / f"{name}_tml_karaoke.act.ckd")
+
 
 def write_videoscoach_files(paths: dict[str, Path], codename: str) -> None:
     """Write videoscoach ISC and MPD CKD files."""
@@ -392,6 +412,9 @@ def write_videoscoach_files(paths: dict[str, Path], codename: str) -> None:
     # MPD CKD (binary DASH descriptor)
     write_mpd_ckd(codename, cache_vc / f"{name}.mpd.ckd")
 
+    # Generate videoscoach binary actor (video_player_main.act.ckd)
+    write_videoscoach_act_ckd(codename, cache_vc / "video_player_main.act.ckd")
+
 
 def write_autodance_files(paths: dict[str, Path], codename: str) -> None:
     """Write autodance subsystem CKD files."""
@@ -414,6 +437,9 @@ def write_autodance_files(paths: dict[str, Path], codename: str) -> None:
 \t\t</sceneConfigs>
 \t</Scene>
 </root>""", encoding="utf-8")
+
+    # Generate autodance binary actor
+    write_autodance_act_ckd(codename, cache_ad / f"{name}_autodance.act.ckd")
 
 
 def write_main_scene_isc(paths: dict[str, Path], codename: str) -> None:
@@ -495,6 +521,9 @@ def generate_all_scenes(output_root: Path, codename: str, num_coach: int = 1) ->
     write_autodance_files(paths, codename)
     write_menuart_isc(paths, codename, num_coach)
     write_main_scene_isc(paths, codename)
+
+    # Generate songdesc binary actor (songdesc.act.ckd)
+    write_songdesc_act_ckd(codename, paths["cache_root"] / "songdesc.act.ckd")
 
     logger.info("PC MainScene generation complete for '%s'", codename)
     return paths
