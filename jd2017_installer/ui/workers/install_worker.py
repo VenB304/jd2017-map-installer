@@ -64,7 +64,6 @@ class InstallWorker(QObject):
         self.signals.progress.emit(progress.phase, progress.current, progress.total, progress.detail)
 
     def _log(self, level: int, message: str) -> None:
-        logger.log(level, message)
         self.signals.log.emit(level, message)
 
     @pyqtSlot()
@@ -158,19 +157,32 @@ class InstallWorker(QObject):
             
             paths = generate_all_scenes(build_dir, codename, num_coach=num_coach)
             
-            # 1. Copy songdesc.tpl.ckd and modify JDVersion
-            def set_jd_version(obj):
+            # Extract original version before patching
+            original_jd_version = 2017  # fallback
+            if songdesc_path.exists():
+                # Read from existing songdesc
+                components = sd_json.get("COMPONENTS", [{}])
+                for comp in components:
+                    if isinstance(comp, dict):
+                        v = comp.get("OriginalJDVersion") or comp.get("JDVersion")
+                        if v and int(v) != 0:
+                            original_jd_version = int(v)
+                            break
+            elif jdlo_meta_path.exists():
+                original_jd_version = jdlo_meta.get("originalJDVersion", 2021)
+
+            def patch_song_desc_versions(obj, original_jd_version: int):
                 if isinstance(obj, dict):
                     if "JDVersion" in obj:
-                        obj["OriginalJDVersion"] = obj["JDVersion"]
+                        obj["OriginalJDVersion"] = original_jd_version
                         obj["JDVersion"] = 2017
                     for v in obj.values():
-                        set_jd_version(v)
+                        patch_song_desc_versions(v, original_jd_version)
                 elif isinstance(obj, list):
                     for item in obj:
-                        set_jd_version(item)
+                        patch_song_desc_versions(item, original_jd_version)
             
-            set_jd_version(sd_json)
+            patch_song_desc_versions(sd_json, original_jd_version)
             build_songdesc = paths["cache_root"] / "songdesc.tpl.ckd"
             build_songdesc.parent.mkdir(parents=True, exist_ok=True)
             build_songdesc.write_text(json.dumps(sd_json, ensure_ascii=True), encoding="utf-8")
@@ -239,13 +251,37 @@ class InstallWorker(QObject):
                         shutil.copy2(ext_img, menuart_dir / ext_img.name)
                     except Exception as e:
                         self._log(logging.WARNING, f"Failed to copy phone image {ext_img.name}: {e}")
+                        
+            # Phase 1 Fallback: banner_bkg generation
+            banner_dst = menuart_dir / f"{codename.lower()}_banner_bkg.tga.ckd"
+            if not banner_dst.exists():
+                map_bkg_src = self.extractor.media_context.map_bkg_path if hasattr(self, "extractor") and hasattr(self.extractor, "media_context") else None
+                if not map_bkg_src or not map_bkg_src.exists():
+                    for ext in (".png", ".tga", ".jpg"):
+                        candidate = menuart_dir / f"{codename.lower()}_map_bkg{ext}"
+                        if candidate.exists():
+                            map_bkg_src = candidate
+                            break
+                if map_bkg_src and map_bkg_src.exists():
+                    try:
+                        from jd2017_installer.installers.texture_encoder import create_banner_background_ckd
+                        create_banner_background_ckd(map_bkg_src, banner_dst)
+                        self._log(logging.INFO, f"Generated banner_bkg from map_bkg for '{codename}'")
+                    except Exception as e:
+                        self._log(logging.WARNING, f"Failed to generate banner_bkg for '{codename}': {e}")
                 
             # 3. Modify dtape `.png` to `.tga`
-            dtape_file = dst_timeline / f"{codename.lower()}_tml_dance.dtape.ckd"
-            if dtape_file.exists():
-                dtape_text = dtape_file.read_text(encoding="utf-8", errors="replace")
-                dtape_text = dtape_text.replace(".png", ".tga")
-                dtape_file.write_text(dtape_text, encoding="utf-8")
+            dtape_candidates = list(dst_timeline.glob("*.dtape.ckd"))
+            for dtape_file in dtape_candidates:
+                if "dance" in dtape_file.name.lower():
+                    try:
+                        dtape_text = dtape_file.read_text(encoding="utf-8", errors="replace")
+                        if ".png" in dtape_text:
+                            dtape_text = dtape_text.replace(".png", ".tga")
+                            dtape_file.write_text(dtape_text, encoding="utf-8")
+                            self._log(logging.INFO, f"Patched picto paths in {dtape_file.name}")
+                    except Exception as e:
+                        self._log(logging.WARNING, f"Failed to patch dtape '{dtape_file.name}': {e}")
                 
             # 4. Modify musictrack `.wav` to `.ogg`
             extracted_cache = extracted_path / "cache" / "itf_cooked" / "pc" / "world" / "maps" / codename.lower()
@@ -256,6 +292,8 @@ class InstallWorker(QObject):
                 mt_text = mt_text.replace(".wav", ".ogg")
                 dst_musictrack.parent.mkdir(parents=True, exist_ok=True)
                 dst_musictrack.write_text(mt_text, encoding="utf-8")
+            else:
+                self._log(logging.WARNING, f"musictrack.tpl.ckd not found for '{codename}', audio sequencing may be incomplete")
                 
             # 5. Copy media assets to world directories
             self._log(logging.INFO, "Copying media assets (audio/video)...")
@@ -276,7 +314,16 @@ class InstallWorker(QObject):
             
             # Phase 4: IPK Packing
             self._log(logging.INFO, "[Phase 4] Packing bundle IPK...")
-            bundle_name = f"{codename.lower()}_pc.ipk"
+            existing_bundles = list(game_dir.glob("bundle_*_pc.ipk"))
+            max_num = 0
+            for b in existing_bundles:
+                try:
+                    num = int(b.name.split("_")[1])
+                    max_num = max(max_num, num)
+                except (ValueError, IndexError):
+                    pass
+            next_num = max_num + 1
+            bundle_name = f"bundle_{next_num:02d}_pc.ipk"
             bundle_path = game_dir / bundle_name
             
             self.signals.progress.emit("ipk_packing", 0, 1, f"Building {bundle_name}")
