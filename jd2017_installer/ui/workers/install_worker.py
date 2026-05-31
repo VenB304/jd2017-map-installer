@@ -135,17 +135,22 @@ class InstallWorker(QObject):
                 num_coach = jdlo_meta.get("coachCount", 1)
                 
                 sd_json = {
-                    "__class": "JD_SongDescTemplate",
-                    "MapName": jdlo_meta.get("mapName", codename),
-                    "JDVersion": 2017,
-                    "OriginalJDVersion": jdlo_meta.get("originalJDVersion", 2021),
-                    "Title": jdlo_meta.get("title", "Unknown"),
-                    "Artist": jdlo_meta.get("artist", "Unknown"),
-                    "NumCoach": num_coach,
-                    "Difficulty": jdlo_meta.get("difficulty", 1),
-                    "SweatDifficulty": jdlo_meta.get("sweatDifficulty", 1),
-                    "Status": jdlo_meta.get("status", 3),
-                    "DefaultColors": jdlo_meta.get("songColors", {})
+                    "__class": "Actor_Template",
+                    "WIP": 0,
+                    "LOWPATH": "",
+                    "COMPONENTS": [{
+                        "__class": "JD_SongDescTemplate",
+                        "MapName": jdlo_meta.get("mapName", codename),
+                        "JDVersion": 2017,
+                        "OriginalJDVersion": jdlo_meta.get("originalJDVersion", 2021),
+                        "Title": jdlo_meta.get("title", "Unknown"),
+                        "Artist": jdlo_meta.get("artist", "Unknown"),
+                        "NumCoach": num_coach,
+                        "Difficulty": jdlo_meta.get("difficulty", 1),
+                        "SweatDifficulty": jdlo_meta.get("sweatDifficulty", 1),
+                        "Status": jdlo_meta.get("status", 3),
+                        "DefaultColors": jdlo_meta.get("songColors", {})
+                    }]
                 }
             
             paths = generate_all_scenes(build_dir, codename, num_coach=num_coach)
