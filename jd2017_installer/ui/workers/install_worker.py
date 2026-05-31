@@ -260,10 +260,8 @@ class InstallWorker(QObject):
                 try:
                     raw = ext_file.read_bytes()
                     converted = convert_texture_lossless(raw)
-                    # Correct single 'b' to double 'b' for expand background as per guide.md
+                    # Keep single 'b' for expand background as per guide.md
                     target_name = ext_file.name
-                    if target_name.endswith("_cover_albumbkg.tga.ckd"):
-                        target_name = target_name.replace("_cover_albumbkg.tga.ckd", "_cover_albumbbkg.tga.ckd")
                     (menuart_dir / target_name).write_bytes(converted)
                 except Exception as e:
                     self._log(logging.WARNING, f"Failed to convert menuart {ext_file.name}: {e}")

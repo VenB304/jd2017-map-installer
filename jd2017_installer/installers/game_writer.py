@@ -251,9 +251,9 @@ def write_menuart_isc(paths: dict[str, Path], codename: str, num_coach: int) -> 
     # Album coach
     actors.append(_build_menuart_actor_block(
         codename, "cover_albumcoach", pos2d="738.106323 359.612030", anchor_sel="6"))
-    # Album background (double 'b' spelling as per guide.md)
+    # Album background (single 'b' spelling as per guide.md)
     actors.append(_build_menuart_actor_block(
-        codename, "cover_albumbbkg", pos2d="1067.972168 201.986328"))
+        codename, "cover_albumbkg", pos2d="1067.972168 201.986328"))
     # Coach textures
     for i in range(1, num_coach + 1):
         actors.append(_build_menuart_actor_block(
