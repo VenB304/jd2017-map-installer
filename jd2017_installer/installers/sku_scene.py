@@ -19,7 +19,7 @@ logger = logging.getLogger("jd2017.installers.sku_scene")
 
 # Actor XML template for SkuScene injection
 _ACTOR_TEMPLATE = """\t\t<ACTORS NAME="Actor">
-\t\t\t<Actor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="world/maps/{codename}/songdesc.tpl">
+\t\t\t<Actor RELATIVEZ="0.000000" SCALE="1.000000 1.000000" xFLIPPED="0" USERFRIENDLY="{codename}" MARKER="" POS2D="0.000000 0.000000" ANGLE="0.000000" INSTANCEDATAFILE="" LUA="world/maps/{name}/songdesc.tpl">
 \t\t\t\t<COMPONENTS NAME="JD_SongDescComponent">
 \t\t\t\t\t<JD_SongDescComponent />
 \t\t\t\t</COMPONENTS>
@@ -84,7 +84,7 @@ def _inject_actor_into_isc(isc_path: Path, codename: str) -> bool:
         logger.info("Codename '%s' already registered in %s", codename, isc_path.name)
         return False
 
-    actor_block = _ACTOR_TEMPLATE.format(codename=codename)
+    actor_block = _ACTOR_TEMPLATE.format(codename=codename, name=codename.lower())
 
     # Insert before the <sceneConfigs> block (which sits after the actor
     # entries inside the <Scene> tag in real JD2017 ISC.CKD files).

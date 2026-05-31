@@ -226,38 +226,20 @@ class JDLOClient:
         
         merged_packages = {}
         
-        # We need to map our SCENE_PLATFORM_PREFERENCE into JDLO X-SkuIds
-        # If a platform isn't explicitly mapped, we will fall back to jd2017-{plat}-all
-        # The list is reversed so that the most preferred platform is merged LAST, 
-        # overwriting any overlapping keys from less-preferred platforms.
-        from jd2017_installer.core.config import SCENE_PLATFORM_PREFERENCE
-        
-        sku_map = {
-            "DURANGO": "jd2021-pc-all", # jd2021-pc-all provides Durango maps on JDLO
-            "NX": "jd2021-nx-all",
-            "ORBIS": "jd2021-orbis-all",
-            "PC": "jd2017-pc-ww"
+        sku_id = "jd2017-pc-ww"
+        headers = {
+            "Authorization": token,
+            "User-Agent": self.USER_AGENT_API,
+            "X-SkuId": sku_id
         }
-        
-        for plat in reversed(SCENE_PLATFORM_PREFERENCE):
-            sku_id = sku_map.get(plat)
-            if not sku_id:
-                logger.debug(f"Skipping JDLO fetch for {plat}: No known SkuId mapped.")
-                continue
-                
-            headers = {
-                "Authorization": token,
-                "User-Agent": self.USER_AGENT_API,
-                "X-SkuId": sku_id
-            }
-            try:
-                resp = self._make_request("GET", "/packages/v1/sku-packages", headers)
-                plat_packages = resp.json()
-                for k, v in plat_packages.items():
-                    merged_packages[k] = v
-                logger.debug(f"Merged {len(plat_packages)} packages from {sku_id} ({plat})")
-            except Exception as e:
-                logger.debug(f"Failed to fetch or no packages for {sku_id} ({plat}): {e}")
+        try:
+            resp = self._make_request("GET", "/packages/v1/sku-packages", headers)
+            plat_packages = resp.json()
+            for k, v in plat_packages.items():
+                merged_packages[k] = v
+            logger.debug(f"Merged {len(plat_packages)} packages from {sku_id} (PC)")
+        except Exception as e:
+            logger.debug(f"Failed to fetch or no packages for {sku_id} (PC): {e}")
                 
         with open(cache_file, "w", encoding="utf-8") as f:
             json.dump(merged_packages, f)

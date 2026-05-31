@@ -24,7 +24,7 @@ _DEEP_SCAN_CACHE_TTL_S = 600.0
 _DEEP_SCAN_CACHE: dict[Path, tuple[float, Optional[Path]]] = {}
 
 # Expected game directory markers for JD2017 PC
-_GAME_MARKERS = ("bundle_pc.ipk", "bundle_logic.ipk")
+_GAME_MARKERS = ("bundle_pc.ipk", "bundlelogic_pc.ipk")
 
 
 def clear_deep_scan_cache(search_root: Optional[Path] = None) -> None:
@@ -129,7 +129,7 @@ def deep_scan_for_game_dir(search_root: Path) -> Optional[Path]:
             # Prune skipped dirs to speed up walk
             dirs[:] = [d for d in dirs if d not in _SCAN_SKIP_DIRS]
 
-            if "bundle_pc.ipk" in files and "bundle_logic.ipk" in files:
+            if "bundle_pc.ipk" in files and "bundlelogic_pc.ipk" in files:
                 game_dir = Path(root)
                 logger.debug("Deep scan found JD2017 game directory at: %s", game_dir)
                 _DEEP_SCAN_CACHE[cache_key] = (now, game_dir)

@@ -42,8 +42,7 @@ def _resolve_game_dir(configured_path: Optional[Path]) -> Path:
             return candidate
 
     raise RuntimeError(
-        "Configured game directory is invalid. It must contain "
-        "data/World/SkuScenes/SkuScene_Maps_PC_All.isc."
+        "Configured game directory is invalid."
     )
 
 
@@ -51,8 +50,7 @@ def _maps_dir(game_dir: Path) -> Path:
     return game_dir / "data" / "World" / "MAPS"
 
 
-def _skuscenes_file(game_dir: Path) -> Path:
-    return game_dir / "data" / "World" / "SkuScenes" / "SkuScene_Maps_PC_All.isc"
+
 
 
 def _itf_cooked_maps_dir(game_dir: Path) -> Path:
@@ -86,19 +84,11 @@ def _remove_non_baseline_dirs(root_dir: Path, keep_names: set[str]) -> int:
 
 
 def _remove_non_baseline_skuscene_entries(game_dir: Path, removable_names: set[str]) -> int:
-    sku_scene = _skuscenes_file(game_dir)
-    if not sku_scene.is_file():
-        return 0
-
     if not removable_names:
         return 0
 
-    content = sku_scene.read_text(encoding="utf-8", errors="replace")
-    present = {
-        match.group(1).strip()
-        for match in re.finditer(r'USERFRIENDLY\s*=\s*"([^"]+)"', content, re.IGNORECASE)
-        if match.group(1).strip()
-    }
+    from jd2017_installer.installers.sku_scene import list_registered_maps
+    present = list_registered_maps(game_dir)
 
     removed = 0
     for codename in sorted(present, key=str.lower):

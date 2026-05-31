@@ -1190,10 +1190,10 @@ class MainWindow(QMainWindow):
             issues.append(f"Game directory does not exist: {game_dir}")
             return issues, warnings
 
-        sku_scene = game_dir / "data" / "World" / "SkuScenes" / "SkuScene_Maps_PC_All.isc"
-        if not sku_scene.is_file():
+        from jd2017_installer.core.path_discovery import is_valid_game_dir
+        if not is_valid_game_dir(game_dir):
             issues.append(
-                "SkuScene_Maps_PC_All.isc not found under the selected game directory."
+                "bundle_pc.ipk and bundlelogic_pc.ipk not found. Make sure you selected a valid JD2017 PC game directory."
             )
 
         game_dir_str = str(game_dir)
@@ -2395,7 +2395,7 @@ class MainWindow(QMainWindow):
         # Adapt InstallWorker signals to JD2021 UI
         def on_progress(phase: str, current: int, total: int, detail: str) -> None:
             pct = int((current / max(1, total)) * 100)
-            self._feedback_panel.set_progress(pct, detail)
+            self._feedback_panel.set_progress(pct)
             
         def on_log(level: int, msg: str) -> None:
             if level >= logging.ERROR:
