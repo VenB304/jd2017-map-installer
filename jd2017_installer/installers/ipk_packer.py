@@ -109,24 +109,20 @@ def pack_folder_to_ipk(source_dir: Path, output_ipk: Path) -> None:
     current_data_offset = 0
 
     for meta in entries_meta:
-        # 28 bytes fixed fields: (u32 × 3) + (u32 × 2 as 8-byte offset) + (u32 × 2)
+        # 28 bytes fixed fields: (u32 × 3) + (u64 timestamp) + (u64 offset)
         # Field layout matching real IPK v5:
         #   u32 numOffset (entry index, 1-based seen in real files)
         #   u32 uncompressed_size
         #   u32 compressed_size (0)
-        #   u32 data_offset_high (0 for small files)
-        #   u32 data_offset_low
-        #   u32 timestamp (0)
-        #   u32 reserved (0)
+        #   u64 timestamp (0)
+        #   u64 offset
         entry_fixed = struct.pack(
-            ">IIIIIII",
+            ">IIIQQ",
             1,                      # numOffset
             meta["size"],           # uncompressed size
             0,                      # compressed size
-            0,                      # data offset high
-            current_data_offset,    # data offset low
             0,                      # timestamp
-            0,                      # reserved
+            current_data_offset,    # offset
         )
         entries_buf.extend(entry_fixed)
 
@@ -192,13 +188,12 @@ def unpack_ipk_to_folder(ipk_path: Path, output_dir: Path, filter_paths: list[st
         for _ in range(num_files):
             # 28 bytes fixed fields
             fixed = f.read(28)
-            vals = struct.unpack(">IIIIIII", fixed)
+            vals = struct.unpack(">IIIQQ", fixed)
             _num_offset = vals[0]
             size = vals[1]
             _compressed_size = vals[2]
-            data_offset_high = vals[3]
-            data_offset_low = vals[4]
-            data_offset = (data_offset_high << 32) | data_offset_low
+            _timestamp = vals[3]
+            data_offset = vals[4]
 
             # name
             name_len = struct.unpack(">I", f.read(4))[0]
