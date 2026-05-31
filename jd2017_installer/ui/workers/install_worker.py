@@ -5,6 +5,9 @@ from __future__ import annotations
 import logging
 import time
 import traceback
+import os
+import shutil
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -173,29 +176,53 @@ class InstallWorker(QObject):
             build_songdesc.write_text(json.dumps(sd_json, ensure_ascii=True), encoding="utf-8")
             
             # 2. Copy timeline and autodance from extracted
-            self._log(logging.INFO, "Copying timeline and autodance logic...")
-            src_timeline = extracted_world / "timeline"
-            src_autodance = extracted_world / "autodance"
-            dst_timeline = paths["cache_timeline"]
-            dst_autodance = paths["cache_autodance"]
+            self._log(logging.INFO, "Copying timeline, autodance, cinematics, and graph logic...")
             
+            src_timeline = extracted_world / "timeline"
+            dst_timeline = paths["cache_timeline"]
             if src_timeline.exists():
                 shutil.copytree(src_timeline, dst_timeline, dirs_exist_ok=True)
+                
+            src_autodance = extracted_world / "autodance"
+            dst_autodance = paths["cache_autodance"]
             if src_autodance.exists():
                 shutil.copytree(src_autodance, dst_autodance, dirs_exist_ok=True)
+
+            src_cine = extracted_world / "cinematics"
+            dst_cine = paths["cache_cinematics"]
+            if src_cine.exists():
+                shutil.copytree(src_cine, dst_cine, dirs_exist_ok=True)
+
+            src_graph = extracted_world / "graph"
+            dst_graph = paths["cache_graph"]
+            if src_graph.exists():
+                shutil.copytree(src_graph, dst_graph, dirs_exist_ok=True)
                 
             self._log(logging.INFO, "Normalizing textures (lossless CKD conversion)...")
-            from jd2017_installer.installers.texture_encoder import convert_texture_lossless
+            from jd2017_installer.installers.texture_encoder import convert_texture_lossless, TextureEncodingError
             
-            pictos_dir = dst_timeline / "pictos"
-            if pictos_dir.exists():
-                for picto_file in pictos_dir.glob("*.tga.ckd"):
-                    try:
-                        raw = picto_file.read_bytes()
-                        converted = convert_texture_lossless(raw)
-                        picto_file.write_bytes(converted)
-                    except Exception as e:
-                        self._log(logging.WARNING, f"Failed to convert picto {picto_file.name}: {e}")
+            # 5. Convert any textures from Orbis/Switch to PC
+            for root, _, files in os.walk(str(build_dir)):
+                for f in files:
+                    # Rename .png.ckd to .tga.ckd first
+                    file_path = Path(root) / f
+                    if f.endswith(".png.ckd"):
+                        new_name = f.replace(".png.ckd", ".tga.ckd")
+                        new_path = Path(root) / new_name
+                        file_path.replace(new_path)
+                        file_path = new_path
+                        f = new_name
+
+                    # Convert .tga.ckd
+                    if f.endswith(".tga.ckd"):
+                        try:
+                            data = file_path.read_bytes()
+                            # Check if it needs conversion (i.e. not already standard DDS)
+                            if len(data) > 44 and b"DDS " not in data[44:48]:
+                                new_data = convert_texture_lossless(data)
+                                file_path.write_bytes(new_data)
+                        except TextureEncodingError as e:
+                            self._log(logging.WARNING, f"Failed to convert texture {file_path.name}: {e}")
                         
             menuart_dir = paths["cache_menuart_textures"]
             for ext_file in extracted_path.glob("*.tga.ckd"):
