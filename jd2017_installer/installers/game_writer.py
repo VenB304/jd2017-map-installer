@@ -583,7 +583,7 @@ def generate_all_scenes(output_root: Path, codename: str, num_coach: int = 1) ->
     write_timeline_isc(paths, codename)
     write_videoscoach_files(paths, codename)
     write_autodance_files(paths, codename)
-    # write_menuart_isc(paths, codename, num_coach)
+    write_menuart_isc(paths, codename, num_coach)
     write_main_scene_isc(paths, codename)
 
     # Generate songdesc binary actor (songdesc.act.ckd)

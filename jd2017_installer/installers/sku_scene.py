@@ -164,6 +164,14 @@ def unregister_map(game_dir: Path, codename: str) -> None:
 
         # 2. Remove Actor from both ISC files
         unregistered_any = False
+        # First, delete any other skuscene files that aren't the target _all file
+        skuscenes_dir = extract_dir / "cache" / "itf_cooked" / "pc" / "world" / "skuscenes"
+        if skuscenes_dir.exists():
+            for f in skuscenes_dir.glob("skuscene_maps_pc_*.isc.ckd"):
+                if f.name != "skuscene_maps_pc_all.isc.ckd":
+                    f.unlink()
+                    logger.info("Deleted legacy SkuScene file: %s", f.name)
+
         for sku_rel_path in _SKU_FILES:
             isc_path = extract_dir / sku_rel_path
             if isc_path.exists():
@@ -171,6 +179,9 @@ def unregister_map(game_dir: Path, codename: str) -> None:
                     text = isc_path.read_bytes().decode("utf-8")
                 except UnicodeDecodeError:
                     text = isc_path.read_bytes().decode("latin-1")
+                    
+                # Fix SKU if necessary
+                text = text.replace('SKU="jd2017-pc-all"', 'SKU="jd2017-pc-ww"')
                     
                 # Regex to match the exact actor block for this codename
                 pattern = re.compile(
@@ -188,6 +199,12 @@ def unregister_map(game_dir: Path, codename: str) -> None:
             logger.info("Map '%s' not found in SkuScenes", codename)
             return
 
+        # Also remove map directory from patch_pc.ipk if it exists
+        map_dir = extract_dir / "world" / "maps" / codename.lower()
+        if map_dir.exists():
+            shutil.rmtree(map_dir)
+            logger.info("Removed patch assets for '%s'", codename)
+
         # 3. Backup and repack
         backup_path = game_dir / "patch_pc.ipk.bak"
         if not backup_path.exists():
@@ -196,17 +213,19 @@ def unregister_map(game_dir: Path, codename: str) -> None:
         pack_folder_to_ipk(extract_dir, patch_ipk)
         logger.info("SkuScene unpatch complete for '%s'", codename)
 
-def patch_sku_scenes(game_dir: Path | str, codenames: list[str] | str) -> None:
+def patch_sku_scenes(game_dir: Path | str, codenames: list[str] | str, extra_content_dir: Path | None = None) -> None:
     """Patch the SkuScene files inside patch_pc.ipk to register new maps.
 
     This:
     1. Unpacks patch_pc.ipk to a temp directory.
     2. Injects Actor entries into both skuscene ISC files.
-    3. Repacks patch_pc.ipk.
+    3. Copies any extra content (like phone images) into the patch if provided.
+    4. Repacks patch_pc.ipk.
 
     Args:
         game_dir: JD2017 PC game root directory.
         codenames: Lowercase map codename(s) to register.
+        extra_content_dir: Optional path to extra directory structure to inject.
     """
     if isinstance(game_dir, str):
         game_dir = Path(game_dir)
@@ -227,6 +246,14 @@ def patch_sku_scenes(game_dir: Path | str, codenames: list[str] | str) -> None:
         # 1. Unpack
         unpack_ipk_to_folder(patch_ipk, extract_dir)
 
+        # Delete any other skuscene files that aren't the target _all file
+        skuscenes_dir = extract_dir / "cache" / "itf_cooked" / "pc" / "world" / "skuscenes"
+        if skuscenes_dir.exists():
+            for f in skuscenes_dir.glob("skuscene_maps_pc_*.isc.ckd"):
+                if f.name != "skuscene_maps_pc_all.isc.ckd":
+                    f.unlink()
+                    logger.info("Deleted legacy SkuScene file: %s", f.name)
+
         # 2. Inject into both ISC files
         injected_any = False
         for sku_rel_path in _SKU_FILES:
@@ -236,6 +263,15 @@ def patch_sku_scenes(game_dir: Path | str, codenames: list[str] | str) -> None:
                 isc_path.parent.mkdir(parents=True, exist_ok=True)
                 sku = "jd2017-pc-ww"
                 isc_path.write_text(_BLANK_SKUSCENE_XML.format(sku=sku), encoding="utf-8")
+            else:
+                try:
+                    text = isc_path.read_bytes().decode("utf-8")
+                except UnicodeDecodeError:
+                    text = isc_path.read_bytes().decode("latin-1")
+                if 'SKU="jd2017-pc-all"' in text:
+                    text = text.replace('SKU="jd2017-pc-all"', 'SKU="jd2017-pc-ww"')
+                    isc_path.write_bytes(text.encode("utf-8"))
+                    logger.info("Replaced jd2017-pc-all SKU with jd2017-pc-ww in %s", isc_path.name)
                 
             for codename in codenames:
                 if _inject_actor_into_isc(isc_path, codename):
@@ -250,6 +286,9 @@ def patch_sku_scenes(game_dir: Path | str, codenames: list[str] | str) -> None:
         if not backup_path.exists():
             shutil.copy2(patch_ipk, backup_path)
             logger.info("Backed up original patch_pc.ipk")
+        if extra_content_dir and extra_content_dir.exists():
+            shutil.copytree(extra_content_dir, extract_dir, dirs_exist_ok=True)
+            logger.info("Injected extra patch content into patch_pc.ipk")
 
         pack_folder_to_ipk(extract_dir, patch_ipk)
         logger.info("SkuScene patch complete for '%s'", codenames)

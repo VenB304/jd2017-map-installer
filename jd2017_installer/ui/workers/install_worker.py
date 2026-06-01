@@ -223,7 +223,7 @@ class InstallWorker(QObject):
 
             build_songdesc = paths["cache_root"] / "songdesc.tpl.ckd"
             build_songdesc.parent.mkdir(parents=True, exist_ok=True)
-            build_songdesc.write_text(json.dumps(sd_json, separators=(',', ':'), ensure_ascii=True), encoding="utf-8")
+            build_songdesc.write_text(json.dumps(sd_json, ensure_ascii=True), encoding="utf-8")
             
             # 2. Copy timeline and autodance from extracted based STRICTLY on guide.md
             self._log(logging.INFO, "Copying timeline and autodance based on guide.md...")
@@ -232,7 +232,7 @@ class InstallWorker(QObject):
             src_uncooked_world = extracted_path / "world" / "maps" / codename.lower()
             dst_uncooked_world = paths["world_root"]
             if (src_uncooked_world / "timeline").exists():
-                shutil.copytree(src_uncooked_world / "timeline", dst_uncooked_world / "timeline", dirs_exist_ok=True, ignore=shutil.ignore_patterns("durango", "*.gesture"))
+                shutil.copytree(src_uncooked_world / "timeline", dst_uncooked_world / "timeline", dirs_exist_ok=True)
             if (src_uncooked_world / "autodance").exists():
                 shutil.copytree(src_uncooked_world / "autodance", dst_uncooked_world / "autodance", dirs_exist_ok=True)
             
@@ -326,11 +326,6 @@ class InstallWorker(QObject):
                         if "albumbbkg" in target_name:
                             target_name = target_name.replace("albumbbkg", "albumbkg")
                         
-                        target_path = paths["world_menuart_textures"] / target_name
-                        if not target_path.exists():
-                            shutil.copy2(ext_file, target_path)
-                            self._log(logging.INFO, f"Copied raw image {ext_file.name} to {target_name} natively")
-                            
                         # Compile to .tga.ckd for the cooked menuart directory (fix for 'X' indicator)
                         ckd_name = f"{ext_file.stem.lower()}.tga.ckd"
                         if "albumbbkg" in ckd_name:
@@ -363,26 +358,29 @@ class InstallWorker(QObject):
             if songdesc_path.exists():
                 try:
                     songdesc_bytes = songdesc_path.read_bytes()
-                    # Only replace .tga with .png for files that actually exist as .png
-                    for png_file in paths["world_menuart_textures"].glob("*.png"):
-                        tga_name = png_file.name.replace(".png", ".tga").encode("utf-8")
+                    # Only replace .tga with .png for phone images
+                    for png_file in extracted_path.rglob("*_phone.*"):
+                        if png_file.suffix.lower() not in (".png", ".jpg", ".jpeg"): continue
+                        tga_name = png_file.name.replace(png_file.suffix, ".tga").encode("utf-8")
                         png_name = png_file.name.encode("utf-8")
                         songdesc_bytes = songdesc_bytes.replace(tga_name, png_name)
                         # try uppercase TGA
-                        tga_name_upper = png_file.name.replace(".png", ".TGA").encode("utf-8")
+                        tga_name_upper = png_file.name.replace(png_file.suffix, ".TGA").encode("utf-8")
                         songdesc_bytes = songdesc_bytes.replace(tga_name_upper, png_name)
                     songdesc_path.write_bytes(songdesc_bytes)
                     self._log(logging.INFO, "Patched songdesc.tpl.ckd to use .png MenuArt textures natively.")
                 except Exception as e:
                     self._log(logging.WARNING, f"Failed to patch songdesc.tpl.ckd: {e}")
                         
-            # Uncooked phone assets belong in world/maps/[codename]/menuart/textures/ as per guide.md (Lines 50-60)
-            world_menuart_dir = paths["world_menuart_textures"]
-            for ext_img in extracted_path.glob("*_phone.*"):
+            # Uncooked phone assets belong in patch_pc.ipk: world/maps/[codename]/menuart/textures/ as per guide.md (Lines 50-60)
+            patch_staging = temp_dir / "patch_staging"
+            patch_world_menuart_dir = patch_staging / "world" / "maps" / codename.lower() / "menuart" / "textures"
+            patch_world_menuart_dir.mkdir(parents=True, exist_ok=True)
+            for ext_img in extracted_path.rglob("*_phone.*"):
                 if ext_img.suffix.lower() in (".png", ".jpg", ".jpeg"):
                     try:
-                        shutil.copy2(ext_img, world_menuart_dir / ext_img.name.lower())
-                        self._log(logging.INFO, f"Copied phone image {ext_img.name.lower()} to uncooked menuart textures")
+                        shutil.copy2(ext_img, patch_world_menuart_dir / ext_img.name.lower())
+                        self._log(logging.INFO, f"Copied phone image {ext_img.name.lower()} to patch_pc staging")
                     except Exception as e:
                         self._log(logging.WARNING, f"Failed to copy phone image {ext_img.name}: {e}")
                         
@@ -481,7 +479,7 @@ class InstallWorker(QObject):
             if src_musictrack.exists():
                 dst_musictrack.parent.mkdir(parents=True, exist_ok=True)
                 mt_bytes = src_musictrack.read_bytes()
-                mt_bytes = mt_bytes.replace(b".wav", b".ogg").replace(b".WAV", b".ogg").strip(b"\x00")
+                mt_bytes = mt_bytes.replace(b".wav", b".ogg").replace(b".WAV", b".ogg")
                 dst_musictrack.write_bytes(mt_bytes)
                 self._log(logging.INFO, f"Copied and patched {src_musictrack.name} to .ogg")
             else:
@@ -516,8 +514,13 @@ class InstallWorker(QObject):
             # Phase 5: Global Registration
             self._log(logging.INFO, "[Phase 5] Registering map globally...")
             
+            # Pass the patch_staging directory to inject phone images into patch_pc.ipk
+            patch_staging = temp_dir / "patch_staging"
+            if not patch_staging.exists():
+                patch_staging = None
+            
             self.signals.progress.emit("registration", 0, 2, "Patching SkuScenes")
-            patch_sku_scenes(game_dir, codename)
+            patch_sku_scenes(game_dir, codename, extra_content_dir=patch_staging)
             
             # JD2017 always requires rebuilding secure_fat.gf after map modifications
             self.signals.progress.emit("registration", 1, 2, "Rebuilding secure_fat.gf")

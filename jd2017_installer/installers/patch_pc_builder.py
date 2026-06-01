@@ -14,7 +14,6 @@ logger = logging.getLogger("jd2017.installers.patch_pc_builder")
 
 _SKU_FILES = [
     "cache/itf_cooked/pc/world/skuscenes/skuscene_maps_pc_all.isc.ckd",
-    "cache/itf_cooked/pc/world/skuscenes/skuscene_maps_pc_ww.isc.ckd",
 ]
 
 def check_and_create_patch_pc(parent_widget, game_dir: Path) -> None:
@@ -84,8 +83,16 @@ def _create_patch_pc_from_base(game_dir: Path, patch_ipk: Path) -> None:
             base_sku = tmp_dir / sku_rel_path
             if not base_sku.exists():
                 base_sku.parent.mkdir(parents=True, exist_ok=True)
-                sku = "jd2017-pc-all" if "all" in base_sku.name.lower() else "jd2017-pc-ww"
+                sku = "jd2017-pc-ww"
                 base_sku.write_bytes(_BLANK_SKUSCENE_XML.format(sku=sku).encode("utf-8"))
+            else:
+                try:
+                    text = base_sku.read_bytes().decode("utf-8")
+                except UnicodeDecodeError:
+                    text = base_sku.read_bytes().decode("latin-1")
+                if 'SKU="jd2017-pc-all"' in text:
+                    text = text.replace('SKU="jd2017-pc-all"', 'SKU="jd2017-pc-ww"')
+                    base_sku.write_bytes(text.encode("utf-8"))
                 
         pack_folder_to_ipk(tmp_dir, patch_ipk)
         logger.info("Successfully initialized new patch_pc.ipk")
@@ -121,8 +128,16 @@ def _create_patch_pc_with_merge(game_dir: Path, patch_ipk: Path, bundle_files: l
             base_sku = tmp_dir / sku_rel_path
             if not base_sku.exists():
                 base_sku.parent.mkdir(parents=True, exist_ok=True)
-                sku = "jd2017-pc-all" if "all" in base_sku.name.lower() else "jd2017-pc-ww"
+                sku = "jd2017-pc-ww"
                 base_sku.write_bytes(_BLANK_SKUSCENE_XML.format(sku=sku).encode("utf-8"))
+            else:
+                try:
+                    text = base_sku.read_bytes().decode("utf-8")
+                except UnicodeDecodeError:
+                    text = base_sku.read_bytes().decode("latin-1")
+                if 'SKU="jd2017-pc-all"' in text:
+                    text = text.replace('SKU="jd2017-pc-all"', 'SKU="jd2017-pc-ww"')
+                    base_sku.write_bytes(text.encode("utf-8"))
             
             for codename in all_codenames:
                 _inject_actor_into_isc(base_sku, codename)
