@@ -180,7 +180,7 @@ class InstallWorker(QObject):
                 shutil.copytree(extracted_world, build_cache_world, dirs_exist_ok=True)
                 self._log(logging.INFO, f"Copied cooked cache from {extracted_world} to {build_cache_world}")
 
-            paths = generate_all_scenes(build_dir, codename, num_coach=num_coach, preserve_existing=True)
+            paths = generate_all_scenes(build_dir, codename, num_coach=num_coach, preserve_existing=False)
             
             # Extract original version before patching
             original_jd_version = 2017  # fallback
@@ -304,11 +304,12 @@ class InstallWorker(QObject):
                     if f.endswith(".tga.ckd") or f.endswith(".png.ckd"):
                         try:
                             data = file_path.read_bytes()
-                            # Check if it needs conversion (i.e. not already standard DDS)
-                            if len(data) > 44 and b"DDS " not in data[44:48]:
+                            # Convert texture or heal header dimensions mismatch if DDS
+                            if len(data) > 44:
                                 new_data = convert_texture_lossless(data, file_path)
                                 if isinstance(new_data, str):
-                                    shutil.copy2(new_data, file_path)
+                                    if Path(new_data) != file_path:
+                                        shutil.copy2(new_data, file_path)
                                 else:
                                     file_path.write_bytes(new_data)
                         except TextureEncodingError as e:

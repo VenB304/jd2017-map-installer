@@ -96,6 +96,12 @@ def _inject_actor_into_isc(isc_path: Path, codename: str) -> bool:
 
     new_text = text.replace(insert_marker, f"{actor_block}\n{insert_marker}", 1)
 
+    # Clean up any lingering empty ACTORS blocks from previous bugs
+    empty_pattern = re.compile(r'\t*\<ACTORS[^>]*\>\s*\</ACTORS\>\r?\n?', re.IGNORECASE)
+    new_text, empty_count = empty_pattern.subn("", new_text)
+    if empty_count > 0:
+        logger.info("Cleaned up %d empty ACTORS blocks in %s", empty_count, isc_path.name)
+
     isc_path.write_bytes(new_text.encode("utf-8"))
     logger.info("Injected Actor for '%s' into %s", codename, isc_path.name)
     return True
@@ -183,12 +189,18 @@ def unregister_map(game_dir: Path, codename: str) -> None:
                 # Fix SKU if necessary
                 text = text.replace('SKU="jd2017-pc-all"', 'SKU="jd2017-pc-ww"')
                     
-                # Regex to match the exact actor block for this codename
+                # Regex to match the exact actor block including parent ACTORS tag
                 pattern = re.compile(
-                    rf'\t*\<Actor[^>]*USERFRIENDLY="{re.escape(codename)}".*?\</Actor\>\r?\n?',
+                    rf'\t*\<ACTORS[^>]*\>\s*\<Actor[^>]*USERFRIENDLY="{re.escape(codename)}".*?\</Actor\>\s*\</ACTORS\>\r?\n?',
                     re.DOTALL | re.IGNORECASE
                 )
                 new_text, count = pattern.subn("", text)
+                
+                # Also clean up any lingering empty ACTORS blocks from previous bugs
+                empty_pattern = re.compile(r'\t*\<ACTORS[^>]*\>\s*\</ACTORS\>\r?\n?', re.IGNORECASE)
+                new_text, empty_count = empty_pattern.subn("", new_text)
+                if empty_count > 0:
+                    logger.info("Cleaned up %d empty ACTORS blocks in %s", empty_count, isc_path.name)
                 
                 if count > 0:
                     isc_path.write_bytes(new_text.encode("utf-8"))

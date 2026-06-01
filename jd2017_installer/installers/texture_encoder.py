@@ -77,6 +77,11 @@ def wrap_dds_to_tga_ckd(dds_bytes: bytes) -> bytes:
     fourcc = dds_bytes[84:88]
     header = bytearray(_CKD_TEXTURE_HEADER)
     
+    # Extract dimensions from DDS header: height is at offset 12 (4 bytes), width is at offset 16 (4 bytes)
+    dds_height, dds_width = struct.unpack('<II', dds_bytes[12:20])
+    # Patch width/height in CKD header at offset 16 (big-endian HH)
+    header[16:20] = struct.pack('>HH', dds_width, dds_height)
+    
     if fourcc == b'DXT5':
         header[22] = 0x18
     elif fourcc == b'DXT1':
@@ -98,7 +103,23 @@ def convert_texture_lossless(src_ckd_bytes: bytes, ckd_path: Path) -> bytes | st
     payload, fmt = strip_ckd_header(src_ckd_bytes)
 
     if fmt == 'dds':
-        # Already a PC native DDS texture, keep the original perfectly intact file
+        # Check for header/DDS dimension mismatch (common in Durango JDU assets)
+        if len(src_ckd_bytes) >= 64:
+            ckd_width, ckd_height = struct.unpack('>HH', src_ckd_bytes[16:20])
+            dds_height, dds_width = struct.unpack('<II', payload[12:20])
+            
+            if ckd_width != dds_width or ckd_height != dds_height:
+                logger.warning(
+                    "Dimension mismatch in native DDS texture header for %s: CKD %dx%d, DDS %dx%d. Fixing header dimensions.",
+                    ckd_path.name if hasattr(ckd_path, 'name') else "unknown",
+                    ckd_width, ckd_height, dds_width, dds_height
+                )
+                # Patch width/height in CKD header bytes (big-endian HH at Offset 16)
+                mutated_bytes = bytearray(src_ckd_bytes)
+                mutated_bytes[16:20] = struct.pack('>HH', dds_width, dds_height)
+                return bytes(mutated_bytes)
+                
+        # Already perfectly PC native DDS texture, keep the original intact file
         return str(ckd_path)
 
     if fmt in ('xtx', 'gtx', 'gtf'):
@@ -209,7 +230,10 @@ def compile_image_to_tga_ckd(
 
     output_ckd_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_ckd_path, "wb") as f:
-        f.write(_CKD_TEXTURE_HEADER)
+        header = bytearray(_CKD_TEXTURE_HEADER)
+        header[16:20] = struct.pack('>HH', img.width, img.height)
+        header[22] = 0x15
+        f.write(header)
         f.write(dds_bytes)
 
     logger.debug("Compiled texture: %s (%dx%d)", output_ckd_path.name, img.width, img.height)
@@ -227,7 +251,10 @@ def compile_image_bytes_to_tga_ckd(image_bytes: bytes) -> bytes:
     import io
     img = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
     dds_bytes = _build_uncompressed_dds(img)
-    return _CKD_TEXTURE_HEADER + dds_bytes
+    header = bytearray(_CKD_TEXTURE_HEADER)
+    header[16:20] = struct.pack('>HH', img.width, img.height)
+    header[22] = 0x15
+    return bytes(header) + dds_bytes
 
 
 # ---------------------------------------------------------------------------
