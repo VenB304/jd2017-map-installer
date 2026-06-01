@@ -231,10 +231,11 @@ class InstallWorker(QObject):
             # Guide Line 44: merge the unpacked main scene's world/maps/[codename] autodance and timeline folders
             src_uncooked_world = extracted_path / "world" / "maps" / codename.lower()
             dst_uncooked_world = paths["world_root"]
+            platform_ignore = shutil.ignore_patterns("durango", "nx", "orbis", "wiiu", "scarlett", "prospero")
             if (src_uncooked_world / "timeline").exists():
-                shutil.copytree(src_uncooked_world / "timeline", dst_uncooked_world / "timeline", dirs_exist_ok=True)
+                shutil.copytree(src_uncooked_world / "timeline", dst_uncooked_world / "timeline", dirs_exist_ok=True, ignore=platform_ignore)
             if (src_uncooked_world / "autodance").exists():
-                shutil.copytree(src_uncooked_world / "autodance", dst_uncooked_world / "autodance", dirs_exist_ok=True)
+                shutil.copytree(src_uncooked_world / "autodance", dst_uncooked_world / "autodance", dirs_exist_ok=True, ignore=platform_ignore)
             
             # Guide Line 65: copy pictos folder, dtape.ckd, ktape.ckd from cache/.../timeline/
             src_timeline = extracted_world / "timeline"

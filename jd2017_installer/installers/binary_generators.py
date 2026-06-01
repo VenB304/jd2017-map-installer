@@ -7,8 +7,8 @@ using exact structural formulas from the UbiArt engine format.
 from __future__ import annotations
 
 import logging
-import random
 from pathlib import Path
+from jd2017_installer.installers.ipk_packer import string_id_bytes
 
 logger = logging.getLogger("jd2017.installers.binary_generators")
 
@@ -44,7 +44,7 @@ def generate_actor_ckd(codename: str, texture_name: str) -> bytes:
     tex_path = f"world/maps/{codename.lower()}/menuart/textures/".encode()
     path_len = len(tex_path).to_bytes(4, "big")
 
-    file_hash = random.randint(1000000000, 4000000000).to_bytes(4, "big")
+    file_hash = string_id_bytes((tex_path + tga_filename).decode("utf-8"))
 
     suffix = (
         b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xFF\xFF\xFF\xFF'
@@ -104,7 +104,7 @@ def generate_autodance_act_ckd(codename: str) -> bytes:
     path_str = f"world/maps/{codename.lower()}/autodance/".encode()
     path_len = len(path_str).to_bytes(4, "big")
 
-    file_hash = random.randint(1000000000, 4000000000).to_bytes(4, "big")
+    file_hash = string_id_bytes((path_str + tpl_filename).decode("utf-8"))
     suffix = b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x67\xB8\xBB\x77'
 
     return prefix + tpl_len + tpl_filename + path_len + path_str + file_hash + suffix
@@ -144,7 +144,7 @@ def generate_dance_act_ckd(codename: str) -> bytes:
     path_str = f"world/maps/{codename.lower()}/timeline/".encode()
     path_len = len(path_str).to_bytes(4, "big")
 
-    file_hash = random.randint(1000000000, 4000000000).to_bytes(4, "big")
+    file_hash = string_id_bytes((path_str + tpl_filename).decode("utf-8"))
     suffix = b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x23\x1F\x27\xDE'
 
     return prefix + tpl_len + tpl_filename + path_len + path_str + file_hash + suffix
@@ -184,7 +184,7 @@ def generate_karaoke_act_ckd(codename: str) -> bytes:
     path_str = f"world/maps/{codename.lower()}/timeline/".encode()
     path_len = len(path_str).to_bytes(4, "big")
 
-    file_hash = random.randint(1000000000, 4000000000).to_bytes(4, "big")
+    file_hash = string_id_bytes((path_str + tpl_filename).decode("utf-8"))
     suffix = b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x23\x1F\x27\xDE'
 
     return prefix + tpl_len + tpl_filename + path_len + path_str + file_hash + suffix
@@ -232,8 +232,8 @@ def generate_videoscoach_act_ckd(codename: str) -> bytes:
     path_str = f"world/maps/{codename.lower()}/videoscoach/".encode()
     path_len = len(path_str).to_bytes(4, "big")
 
-    file_hash1 = random.randint(1000000000, 4000000000).to_bytes(4, "big")
-    file_hash2 = random.randint(1000000000, 4000000000).to_bytes(4, "big")
+    file_hash1 = string_id_bytes((path_str + webm_filename).decode("utf-8"))
+    file_hash2 = string_id_bytes((path_str + mpd_filename).decode("utf-8"))
 
     return (
         prefix
@@ -281,7 +281,7 @@ def generate_songdesc_act_ckd(codename: str) -> bytes:
     path_str = f"world/maps/{codename.lower()}/".encode()
     path_len = len(path_str).to_bytes(4, "big")
 
-    file_hash = random.randint(1000000000, 4000000000).to_bytes(4, "big")
+    file_hash = string_id_bytes((path_str + b"songdesc.tpl").decode("utf-8"))
     suffix = b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\xE0\x7F\xCC\x3F'
 
     return prefix + path_len + path_str + file_hash + suffix
