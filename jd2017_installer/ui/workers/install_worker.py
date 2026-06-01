@@ -204,6 +204,24 @@ class InstallWorker(QObject):
                         patch_song_desc_versions(item, original_jd_version)
             
             patch_song_desc_versions(sd_json, original_jd_version)
+            
+            # JD2017 PC engine crashes on boot if texture paths are missing from JSON songdesc
+            for comp in sd_json.get("COMPONENTS", []):
+                if comp.get("__class") == "JD_SongDescTemplate":
+                    name_lower = codename.lower()
+                    base_path = f"world/maps/{name_lower}/menuart/textures/{name_lower}"
+                    if "Cover" not in comp: comp["Cover"] = f"{base_path}_cover_generic.tga"
+                    if "CoverOnline" not in comp: comp["CoverOnline"] = f"{base_path}_cover_online.tga"
+                    if "AlbumCoach" not in comp: comp["AlbumCoach"] = f"{base_path}_cover_albumcoach.tga"
+                    if "AlbumBkg" not in comp: comp["AlbumBkg"] = f"{base_path}_cover_albumbkg.tga"
+                    if "BannerBkg" not in comp: comp["BannerBkg"] = f"{base_path}_banner_bkg.tga"
+                    for i in range(1, 5):
+                        coach_key = f"Coach{i}"
+                        if coach_key not in comp: comp[coach_key] = f"{base_path}_coach_{i}.tga"
+                    
+                    # Also ensure MapName is explicitly matched to codename to avoid mismatches
+                    comp["MapName"] = codename
+
             build_songdesc = paths["cache_root"] / "songdesc.tpl.ckd"
             build_songdesc.parent.mkdir(parents=True, exist_ok=True)
             build_songdesc.write_text(json.dumps(sd_json, ensure_ascii=True), encoding="utf-8")
