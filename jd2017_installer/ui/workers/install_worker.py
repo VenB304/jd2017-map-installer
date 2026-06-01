@@ -175,7 +175,12 @@ class InstallWorker(QObject):
                     }]
                 }
             
-            paths = generate_all_scenes(build_dir, codename, num_coach=num_coach)
+            build_cache_world = build_dir / "cache" / "itf_cooked" / "pc" / "world" / "maps" / codename.lower()
+            if extracted_world.exists():
+                shutil.copytree(extracted_world, build_cache_world, dirs_exist_ok=True)
+                self._log(logging.INFO, f"Copied cooked cache from {extracted_world} to {build_cache_world}")
+
+            paths = generate_all_scenes(build_dir, codename, num_coach=num_coach, preserve_existing=True)
             
             # Extract original version before patching
             original_jd_version = 2017  # fallback
@@ -188,42 +193,61 @@ class InstallWorker(QObject):
                         if v and int(v) != 0:
                             original_jd_version = int(v)
                             break
-            elif jdlo_meta_path.exists():
-                original_jd_version = jdlo_meta.get("originalJDVersion", 2021)
-
-            def patch_song_desc_versions(obj, original_jd_version: int):
-                if isinstance(obj, dict):
-                    if "JDVersion" in obj:
-                        obj["OriginalJDVersion"] = original_jd_version
-                        obj["JDVersion"] = 2017
-                    for v in obj.values():
-                        patch_song_desc_versions(v, original_jd_version)
-                elif isinstance(obj, list):
-                    for item in obj:
-                        patch_song_desc_versions(item, original_jd_version)
-            
-            patch_song_desc_versions(sd_json, original_jd_version)
-            
-            # JD2017 PC engine crashes on boot if texture paths are missing from JSON songdesc
-            for comp in sd_json.get("COMPONENTS", []):
-                if comp.get("__class") == "JD_SongDescTemplate":
-                    name_lower = codename.lower()
-                    base_path = f"world/maps/{name_lower}/menuart/textures/{name_lower}"
-                    if "Cover" not in comp: comp["Cover"] = f"{base_path}_cover_generic.tga"
-                    if "CoverOnline" not in comp: comp["CoverOnline"] = f"{base_path}_cover_online.tga"
-                    if "AlbumCoach" not in comp: comp["AlbumCoach"] = f"{base_path}_cover_albumcoach.tga"
-                    if "AlbumBkg" not in comp: comp["AlbumBkg"] = f"{base_path}_cover_albumbkg.tga"
-                    if "BannerBkg" not in comp: comp["BannerBkg"] = f"{base_path}_banner_bkg.tga"
-                    for i in range(1, 5):
-                        coach_key = f"Coach{i}"
-                        if coach_key not in comp: comp[coach_key] = f"{base_path}_coach_{i}.tga"
+                            
+                import re
+                patched_bytes = sd_content
+                
+                def repl_jdversion(m): return m.group(1) + b"2017"
+                patched_bytes = re.sub(b'("JDVersion"\\s*:\\s*)\\d+', repl_jdversion, patched_bytes)
+                
+                def repl_mapname(m): return m.group(1) + b'"' + codename.encode('utf-8') + b'"'
+                patched_bytes = re.sub(b'("MapName"\\s*:\\s*)"[^"]+"', repl_mapname, patched_bytes)
+                
+                orig_jd_v_bytes = str(original_jd_version).encode('utf-8')
+                if b'"OriginalJDVersion"' in patched_bytes:
+                    def repl_orig(m): return m.group(1) + orig_jd_v_bytes
+                    patched_bytes = re.sub(b'("OriginalJDVersion"\\s*:\\s*)\\d+', repl_orig, patched_bytes)
+                else:
+                    def repl_insert_orig(m): return m.group(1) + b'"OriginalJDVersion":' + orig_jd_v_bytes + b','
+                    patched_bytes = re.sub(b'("JDVersion"\\s*:\\s*\\d+,?)', repl_insert_orig, patched_bytes)
+                
+                build_songdesc = paths["cache_root"] / "songdesc.tpl.ckd"
+                build_songdesc.parent.mkdir(parents=True, exist_ok=True)
+                build_songdesc.write_bytes(patched_bytes)
+            else:
+                if jdlo_meta_path.exists():
+                    original_jd_version = jdlo_meta.get("originalJDVersion", 2021)
                     
-                    # Also ensure MapName is explicitly matched to codename to avoid mismatches
-                    comp["MapName"] = codename
-
-            build_songdesc = paths["cache_root"] / "songdesc.tpl.ckd"
-            build_songdesc.parent.mkdir(parents=True, exist_ok=True)
-            build_songdesc.write_text(json.dumps(sd_json, ensure_ascii=True), encoding="utf-8")
+                def patch_song_desc_versions(obj, original_jd_version: int):
+                    if isinstance(obj, dict):
+                        if "JDVersion" in obj:
+                            obj["OriginalJDVersion"] = original_jd_version
+                            obj["JDVersion"] = 2017
+                        for v in obj.values():
+                            patch_song_desc_versions(v, original_jd_version)
+                    elif isinstance(obj, list):
+                        for item in obj:
+                            patch_song_desc_versions(item, original_jd_version)
+                
+                patch_song_desc_versions(sd_json, original_jd_version)
+                
+                for comp in sd_json.get("COMPONENTS", []):
+                    if comp.get("__class") == "JD_SongDescTemplate":
+                        name_lower = codename.lower()
+                        base_path = f"world/maps/{name_lower}/menuart/textures/{name_lower}"
+                        if "Cover" not in comp: comp["Cover"] = f"{base_path}_cover_generic.tga"
+                        if "CoverOnline" not in comp: comp["CoverOnline"] = f"{base_path}_cover_online.tga"
+                        if "AlbumCoach" not in comp: comp["AlbumCoach"] = f"{base_path}_cover_albumcoach.tga"
+                        if "AlbumBkg" not in comp: comp["AlbumBkg"] = f"{base_path}_cover_albumbkg.tga"
+                        if "BannerBkg" not in comp: comp["BannerBkg"] = f"{base_path}_banner_bkg.tga"
+                        for i in range(1, 5):
+                            coach_key = f"Coach{i}"
+                            if coach_key not in comp: comp[coach_key] = f"{base_path}_coach_{i}.tga"
+                        comp["MapName"] = codename
+                
+                build_songdesc = paths["cache_root"] / "songdesc.tpl.ckd"
+                build_songdesc.parent.mkdir(parents=True, exist_ok=True)
+                build_songdesc.write_text(json.dumps(sd_json, ensure_ascii=True), encoding="utf-8")
             
             # 2. Copy timeline and autodance from extracted based STRICTLY on guide.md
             self._log(logging.INFO, "Copying timeline and autodance based on guide.md...")
@@ -231,7 +255,7 @@ class InstallWorker(QObject):
             # Guide Line 44: merge the unpacked main scene's world/maps/[codename] autodance and timeline folders
             src_uncooked_world = extracted_path / "world" / "maps" / codename.lower()
             dst_uncooked_world = paths["world_root"]
-            platform_ignore = shutil.ignore_patterns("durango", "nx", "orbis", "wiiu", "scarlett", "prospero")
+            platform_ignore = shutil.ignore_patterns("durango", "nx", "orbis", "scarlett", "prospero")
             if (src_uncooked_world / "timeline").exists():
                 shutil.copytree(src_uncooked_world / "timeline", dst_uncooked_world / "timeline", dirs_exist_ok=True, ignore=platform_ignore)
             if (src_uncooked_world / "autodance").exists():
@@ -491,14 +515,22 @@ class InstallWorker(QObject):
             audio_dst = paths["world_audio"] / f"{codename.lower()}.ogg"
             video_dst = paths["world_videoscoach"] / f"{codename.lower()}.webm"
             
-            ogg_candidates = list(extracted_path.glob("*.ogg"))
-            if ogg_candidates:
+            ogg_candidates = list(extracted_path.rglob("*.ogg"))
+            
+            pref_audio = extracted_path / "world" / "maps" / codename.lower() / "audio" / f"{codename.lower()}.ogg"
+            if pref_audio.exists():
+                shutil.copy2(pref_audio, audio_dst)
+            elif ogg_candidates:
                 shutil.copy2(ogg_candidates[0], audio_dst)
             else:
                 self._log(logging.WARNING, f"No .ogg audio file found in {extracted_path.name}")
                 
-            webm_candidates = list(extracted_path.glob("*.webm"))
-            if webm_candidates:
+            webm_candidates = list(extracted_path.rglob("*.webm"))
+            
+            pref_video = extracted_path / "world" / "maps" / codename.lower() / "videoscoach" / f"{codename.lower()}.webm"
+            if pref_video.exists():
+                shutil.copy2(pref_video, video_dst)
+            elif webm_candidates:
                 shutil.copy2(webm_candidates[0], video_dst)
             else:
                 self._log(logging.WARNING, f"No .webm video file found in {extracted_path.name}")

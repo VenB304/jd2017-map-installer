@@ -30,6 +30,18 @@ logger = logging.getLogger("jd2017.installers.game_writer")
 _ENGINE_VERSION = "253653"
 
 
+def _write_text(path: Path, content: str, preserve_existing: bool) -> None:
+    if preserve_existing and path.exists():
+        return
+    path.write_text(content, encoding="utf-8")
+
+
+def _write_bytes(path: Path, content: bytes, preserve_existing: bool) -> None:
+    if preserve_existing and path.exists():
+        return
+    path.write_bytes(content)
+
+
 def setup_dirs(output_root: Path, codename: str) -> dict[str, Path]:
     """Create the standard JD2017 PC directory structure and return key paths.
 
@@ -71,7 +83,7 @@ def setup_dirs(output_root: Path, codename: str) -> dict[str, Path]:
     return paths
 
 
-def write_audio_files(paths: dict[str, Path], codename: str) -> None:
+def write_audio_files(paths: dict[str, Path], codename: str, preserve_existing: bool = False) -> None:
     """Write audio subsystem CKD files (.stape.ckd, _audio.isc.ckd, _sequence.tpl.ckd)."""
     name = codename.lower()
     cache_audio = paths["cache_audio"]
@@ -85,12 +97,14 @@ def write_audio_files(paths: dict[str, Path], codename: str) -> None:
         "FreeResourcesAfterPlay": 0,
         "MapName": codename,
     }
-    (cache_audio / f"{name}.stape.ckd").write_text(
-        json.dumps(stape, ensure_ascii=True), encoding="utf-8"
+    _write_text(
+        cache_audio / f"{name}.stape.ckd",
+        json.dumps(stape, ensure_ascii=True),
+        preserve_existing,
     )
 
     # _audio.isc.ckd
-    (cache_audio / f"{name}_audio.isc.ckd").write_text(f"""<?xml version="1.0" encoding="ISO-8859-1"?>
+    _write_text(cache_audio / f"{name}_audio.isc.ckd", f"""<?xml version="1.0" encoding="ISO-8859-1"?>
 <root>
 \t<Scene ENGINE_VERSION="{_ENGINE_VERSION}" GRIDUNIT="0.500000" DEPTH_SEPARATOR="0" NEAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" FAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" viewFamily="0">
 \t\t<ACTORS NAME="Actor">
@@ -112,7 +126,7 @@ def write_audio_files(paths: dict[str, Path], codename: str) -> None:
 \t\t</sceneConfigs>
 \t</Scene>
 </root>
-""", encoding="utf-8")
+""", preserve_existing)
 
     # _sequence.tpl.ckd
     seq_tpl = {
@@ -131,12 +145,14 @@ def write_audio_files(paths: dict[str, Path], codename: str) -> None:
             }]
         }]
     }
-    (cache_audio / f"{name}_sequence.tpl.ckd").write_text(
-        json.dumps(seq_tpl, ensure_ascii=True), encoding="utf-8"
+    _write_text(
+        cache_audio / f"{name}_sequence.tpl.ckd",
+        json.dumps(seq_tpl, ensure_ascii=True),
+        preserve_existing,
     )
 
 
-def write_cinematics_files(paths: dict[str, Path], codename: str) -> None:
+def write_cinematics_files(paths: dict[str, Path], codename: str, preserve_existing: bool = False) -> None:
     """Write cinematics subsystem CKD files."""
     name = codename.lower()
     cache_cine = paths["cache_cinematics"]
@@ -150,12 +166,14 @@ def write_cinematics_files(paths: dict[str, Path], codename: str) -> None:
         "FreeResourcesAfterPlay": 0,
         "MapName": codename,
     }
-    (cache_cine / f"{name}_mainsequence.tape.ckd").write_text(
-        json.dumps(tape, ensure_ascii=True), encoding="utf-8"
+    _write_text(
+        cache_cine / f"{name}_mainsequence.tape.ckd",
+        json.dumps(tape, ensure_ascii=True),
+        preserve_existing,
     )
 
     # _cine.isc.ckd
-    (cache_cine / f"{name}_cine.isc.ckd").write_text(f"""<?xml version="1.0" encoding="ISO-8859-1"?>
+    _write_text(cache_cine / f"{name}_cine.isc.ckd", f"""<?xml version="1.0" encoding="ISO-8859-1"?>
 <root>
 \t<Scene ENGINE_VERSION="{_ENGINE_VERSION}" GRIDUNIT="0.500000" DEPTH_SEPARATOR="0" NEAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" FAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" viewFamily="0">
 \t\t<ACTORS NAME="Actor">
@@ -169,7 +187,7 @@ def write_cinematics_files(paths: dict[str, Path], codename: str) -> None:
 \t\t\t<SceneConfigs activeSceneConfig="0" />
 \t\t</sceneConfigs>
 \t</Scene>
-</root>""", encoding="utf-8")
+</root>""", preserve_existing)
 
     # _mainsequence.tpl.ckd
     cine_tpl = {
@@ -188,15 +206,17 @@ def write_cinematics_files(paths: dict[str, Path], codename: str) -> None:
             }]
         }]
     }
-    (cache_cine / f"{name}_mainsequence.tpl.ckd").write_text(
-        json.dumps(cine_tpl, ensure_ascii=True), encoding="utf-8"
+    _write_text(
+        cache_cine / f"{name}_mainsequence.tpl.ckd",
+        json.dumps(cine_tpl, ensure_ascii=True),
+        preserve_existing,
     )
 
 
-def write_graph_files(paths: dict[str, Path], codename: str) -> None:
+def write_graph_files(paths: dict[str, Path], codename: str, preserve_existing: bool = False) -> None:
     """Write graph subsystem ISC file."""
     name = codename.lower()
-    (paths["cache_graph"] / f"{name}_graph.isc.ckd").write_text(f"""<?xml version="1.0" encoding="ISO-8859-1"?>
+    _write_text(paths["cache_graph"] / f"{name}_graph.isc.ckd", f"""<?xml version="1.0" encoding="ISO-8859-1"?>
 <root>
 \t<Scene ENGINE_VERSION="{_ENGINE_VERSION}" GRIDUNIT="0.500000" DEPTH_SEPARATOR="0" NEAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" FAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" viewFamily="0">
 \t\t<ACTORS NAME="Actor">
@@ -205,8 +225,8 @@ def write_graph_files(paths: dict[str, Path], codename: str) -> None:
 \t\t<sceneConfigs>
 \t\t\t<SceneConfigs activeSceneConfig="0" />
 \t\t</sceneConfigs>
-\t</Scene>
-</root>""", encoding="utf-8")
+	</Scene>
+</root>""", preserve_existing)
 
 
 def _build_menuart_actor_block(codename: str, art_name: str,
@@ -243,7 +263,12 @@ def _build_menuart_actor_block(codename: str, art_name: str,
 \t\t</ACTORS>"""
 
 
-def write_menuart_isc(paths: dict[str, Path], codename: str, num_coach: int) -> None:
+def write_menuart_isc(
+    paths: dict[str, Path],
+    codename: str,
+    num_coach: int,
+    preserve_existing: bool = False,
+) -> None:
     """Write the menuart ISC file with actors for all required textures."""
     name = codename.lower()
     actors = []
@@ -273,7 +298,9 @@ def write_menuart_isc(paths: dict[str, Path], codename: str, num_coach: int) -> 
 
     actors_xml = "\n".join(actors)
 
-    (paths["cache_menuart"] / f"{name}_menuart.isc.ckd").write_text(f"""<?xml version="1.0" encoding="ISO-8859-1"?>
+    _write_text(
+        paths["cache_menuart"] / f"{name}_menuart.isc.ckd",
+        f"""<?xml version="1.0" encoding="ISO-8859-1"?>
 <root>
 \t<Scene ENGINE_VERSION="{_ENGINE_VERSION}" GRIDUNIT="0.500000" DEPTH_SEPARATOR="0" NEAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" FAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" viewFamily="1">
 {actors_xml}
@@ -281,21 +308,35 @@ def write_menuart_isc(paths: dict[str, Path], codename: str, num_coach: int) -> 
 \t\t\t<SceneConfigs activeSceneConfig="0" />
 \t\t</sceneConfigs>
 \t</Scene>
-</root>""", encoding="utf-8")
+</root>""",
+        preserve_existing,
+    )
 
     # Generate texture actor (.act.ckd) files in cache_menuart_actors
     cache_actors = paths["cache_menuart_actors"]
-    write_actor_ckd(codename, f"{name}_cover_albumcoach", cache_actors / f"{name}_cover_albumcoach.act.ckd")
-    write_actor_ckd(codename, f"{name}_banner_bkg", cache_actors / f"{name}_banner_bkg.act.ckd")
-    write_actor_ckd(codename, f"{name}_cover_generic", cache_actors / f"{name}_cover_generic.act.ckd")
-    write_actor_ckd(codename, f"{name}_cover_online", cache_actors / f"{name}_cover_online.act.ckd")
-    write_actor_ckd(codename, f"{name}_cover_albumbkg", cache_actors / f"{name}_cover_albumbkg.act.ckd")
+    albumcoach_path = cache_actors / f"{name}_cover_albumcoach.act.ckd"
+    if not (preserve_existing and albumcoach_path.exists()):
+        write_actor_ckd(codename, f"{name}_cover_albumcoach", albumcoach_path)
+    banner_path = cache_actors / f"{name}_banner_bkg.act.ckd"
+    if not (preserve_existing and banner_path.exists()):
+        write_actor_ckd(codename, f"{name}_banner_bkg", banner_path)
+    cover_generic_path = cache_actors / f"{name}_cover_generic.act.ckd"
+    if not (preserve_existing and cover_generic_path.exists()):
+        write_actor_ckd(codename, f"{name}_cover_generic", cover_generic_path)
+    cover_online_path = cache_actors / f"{name}_cover_online.act.ckd"
+    if not (preserve_existing and cover_online_path.exists()):
+        write_actor_ckd(codename, f"{name}_cover_online", cover_online_path)
+    albumbkg_path = cache_actors / f"{name}_cover_albumbkg.act.ckd"
+    if not (preserve_existing and albumbkg_path.exists()):
+        write_actor_ckd(codename, f"{name}_cover_albumbkg", albumbkg_path)
     for i in range(1, num_coach + 1):
-        write_actor_ckd(codename, f"{name}_coach_{i}", cache_actors / f"{name}_coach_{i}.act.ckd")
+        coach_path = cache_actors / f"{name}_coach_{i}.act.ckd"
+        if not (preserve_existing and coach_path.exists()):
+            write_actor_ckd(codename, f"{name}_coach_{i}", coach_path)
 
 
 
-def write_timeline_isc(paths: dict[str, Path], codename: str) -> None:
+def write_timeline_isc(paths: dict[str, Path], codename: str, preserve_existing: bool = False) -> None:
     """Write timeline ISC and TPL CKD files."""
     name = codename.lower()
     cache_tml = paths["cache_timeline"]
@@ -317,8 +358,10 @@ def write_timeline_isc(paths: dict[str, Path], codename: str) -> None:
             }]
         }]
     }
-    (cache_tml / f"{name}_tml_dance.tpl.ckd").write_text(
-        json.dumps(dance_tpl, ensure_ascii=True), encoding="utf-8"
+    _write_text(
+        cache_tml / f"{name}_tml_dance.tpl.ckd",
+        json.dumps(dance_tpl, ensure_ascii=True),
+        preserve_existing,
     )
 
     # TML Karaoke TPL
@@ -338,12 +381,16 @@ def write_timeline_isc(paths: dict[str, Path], codename: str) -> None:
             }]
         }]
     }
-    (cache_tml / f"{name}_tml_karaoke.tpl.ckd").write_text(
-        json.dumps(karaoke_tpl, ensure_ascii=True), encoding="utf-8"
+    _write_text(
+        cache_tml / f"{name}_tml_karaoke.tpl.ckd",
+        json.dumps(karaoke_tpl, ensure_ascii=True),
+        preserve_existing,
     )
 
     # TML ISC
-    (cache_tml / f"{name}_tml.isc.ckd").write_text(f"""<?xml version="1.0" encoding="ISO-8859-1"?>
+    _write_text(
+        cache_tml / f"{name}_tml.isc.ckd",
+        f"""<?xml version="1.0" encoding="ISO-8859-1"?>
 <root>
 \t<Scene ENGINE_VERSION="{_ENGINE_VERSION}" GRIDUNIT="0.500000" DEPTH_SEPARATOR="0" NEAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" FAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" viewFamily="0">
 \t\t<ACTORS NAME="Actor">
@@ -364,20 +411,28 @@ def write_timeline_isc(paths: dict[str, Path], codename: str) -> None:
 \t\t\t<SceneConfigs activeSceneConfig="0" />
 \t\t</sceneConfigs>
 \t</Scene>
-</root>""", encoding="utf-8")
+</root>""",
+        preserve_existing,
+    )
 
     # Generate timeline binary actors
-    write_dance_act_ckd(codename, cache_tml / f"{name}_tml_dance.act.ckd")
-    write_karaoke_act_ckd(codename, cache_tml / f"{name}_tml_karaoke.act.ckd")
+    dance_act_path = cache_tml / f"{name}_tml_dance.act.ckd"
+    if not (preserve_existing and dance_act_path.exists()):
+        write_dance_act_ckd(codename, dance_act_path)
+    karaoke_act_path = cache_tml / f"{name}_tml_karaoke.act.ckd"
+    if not (preserve_existing and karaoke_act_path.exists()):
+        write_karaoke_act_ckd(codename, karaoke_act_path)
 
 
-def write_videoscoach_files(paths: dict[str, Path], codename: str) -> None:
+def write_videoscoach_files(paths: dict[str, Path], codename: str, preserve_existing: bool = False) -> None:
     """Write videoscoach ISC and MPD CKD files."""
     name = codename.lower()
     cache_vc = paths["cache_videoscoach"]
 
     # Video ISC (Matches official JD2017 PC structure exactly)
-    (cache_vc / f"{name}_video.isc.ckd").write_text(f"""<?xml version="1.0" encoding="ISO-8859-1"?>
+    _write_text(
+        cache_vc / f"{name}_video.isc.ckd",
+        f"""<?xml version="1.0" encoding="ISO-8859-1"?>
 <root>
 \t<Scene ENGINE_VERSION="{_ENGINE_VERSION}" GRIDUNIT="0.500000" DEPTH_SEPARATOR="0" NEAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" FAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" viewFamily="0">
 \t\t<ACTORS NAME="Actor">
@@ -416,22 +471,30 @@ def write_videoscoach_files(paths: dict[str, Path], codename: str) -> None:
 \t\t\t<SceneConfigs activeSceneConfig="0" />
 \t\t</sceneConfigs>
 \t</Scene>
-</root>""", encoding="utf-8")
+</root>""",
+        preserve_existing,
+    )
 
     # MPD CKD (binary DASH descriptor)
-    write_mpd_ckd(codename, cache_vc / f"{name}.mpd.ckd")
+    mpd_path = cache_vc / f"{name}.mpd.ckd"
+    if not (preserve_existing and mpd_path.exists()):
+        write_mpd_ckd(codename, mpd_path)
 
     # Generate videoscoach binary actor (video_player_main.act.ckd)
-    write_videoscoach_act_ckd(codename, cache_vc / "video_player_main.act.ckd")
+    video_act_path = cache_vc / "video_player_main.act.ckd"
+    if not (preserve_existing and video_act_path.exists()):
+        write_videoscoach_act_ckd(codename, video_act_path)
 
 
-def write_autodance_files(paths: dict[str, Path], codename: str) -> None:
+def write_autodance_files(paths: dict[str, Path], codename: str, preserve_existing: bool = False) -> None:
     """Write autodance subsystem CKD files."""
     name = codename.lower()
     cache_ad = paths["cache_autodance"]
 
     # Autodance ISC
-    (cache_ad / f"{name}_autodance.isc.ckd").write_text(f"""<?xml version="1.0" encoding="ISO-8859-1"?>
+    _write_text(
+        cache_ad / f"{name}_autodance.isc.ckd",
+        f"""<?xml version="1.0" encoding="ISO-8859-1"?>
 <root>
 \t<Scene ENGINE_VERSION="{_ENGINE_VERSION}" GRIDUNIT="0.500000" DEPTH_SEPARATOR="0" NEAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" FAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" viewFamily="0">
 \t\t<ACTORS NAME="Actor">
@@ -445,13 +508,17 @@ def write_autodance_files(paths: dict[str, Path], codename: str) -> None:
 \t\t\t<SceneConfigs activeSceneConfig="0" />
 \t\t</sceneConfigs>
 \t</Scene>
-</root>""", encoding="utf-8")
+</root>""",
+        preserve_existing,
+    )
 
     # Generate autodance binary actor
-    write_autodance_act_ckd(codename, cache_ad / f"{name}_autodance.act.ckd")
+    autodance_act_path = cache_ad / f"{name}_autodance.act.ckd"
+    if not (preserve_existing and autodance_act_path.exists()):
+        write_autodance_act_ckd(codename, autodance_act_path)
 
 
-def write_main_scene_isc(paths: dict[str, Path], codename: str) -> None:
+def write_main_scene_isc(paths: dict[str, Path], codename: str, preserve_existing: bool = False) -> None:
     """Write the root main scene ISC file that ties all subsystems together."""
     name = codename.lower()
     cache_root = paths["cache_root"]
@@ -464,6 +531,9 @@ def write_main_scene_isc(paths: dict[str, Path], codename: str) -> None:
             raise ValueError(f"Could not find <Scene> block in {file_path}")
         return content[start_idx : end_idx + len("</Scene>")]
 
+    main_scene_path = cache_root / f"{name}_main_scene.isc.ckd"
+    sgs_path = cache_root / f"{name}_main_scene.sgs.ckd"
+
     audio_scene = _get_embedded_scene(paths["cache_audio"] / f"{name}_audio.isc.ckd")
     cine_scene = _get_embedded_scene(paths["cache_cinematics"] / f"{name}_cine.isc.ckd")
     graph_scene = _get_embedded_scene(paths["cache_graph"] / f"{name}_graph.isc.ckd")
@@ -471,7 +541,9 @@ def write_main_scene_isc(paths: dict[str, Path], codename: str) -> None:
     video_scene = _get_embedded_scene(paths["cache_videoscoach"] / f"{name}_video.isc.ckd")
     autodance_scene = _get_embedded_scene(paths["cache_autodance"] / f"{name}_autodance.isc.ckd")
 
-    (cache_root / f"{name}_main_scene.isc.ckd").write_text(f"""<?xml version="1.0" encoding="ISO-8859-1"?>
+    _write_text(
+        main_scene_path,
+        f"""<?xml version="1.0" encoding="ISO-8859-1"?>
 <root>
 \t<Scene ENGINE_VERSION="{_ENGINE_VERSION}" GRIDUNIT="2.000000" DEPTH_SEPARATOR="0" NEAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" FAR_SEPARATOR="1.000000 0.000000 0.000000 0.000000, 0.000000 1.000000 0.000000 0.000000, 0.000000 0.000000 1.000000 0.000000, 0.000000 0.000000 0.000000 1.000000" viewFamily="0">
 \t\t<PLATFORM_FILTER>
@@ -546,11 +618,14 @@ def write_main_scene_isc(paths: dict[str, Path], codename: str) -> None:
 \t\t\t</SceneConfigs>
 \t\t</sceneConfigs>
 \t</Scene>
-</root>""", encoding="utf-8")
+</root>""",
+        preserve_existing,
+    )
 
-    (cache_root / f"{name}_main_scene.sgs.ckd").write_text(
+    _write_text(
+        sgs_path,
         'S{"settings":{"__class":"JD_MapSceneConfig","Pause_Level":6,"name":"","type":1,"musicscore":2,"soundContext":"","hud":0,"phoneTitleLocId":4294967295,"phoneImage":""}}',
-        encoding="utf-8"
+        preserve_existing,
     )
 
 def write_game_files(*args, **kwargs): pass
@@ -559,7 +634,12 @@ def is_map_installed(*args, **kwargs): return False
 def uninstall_map(*args, **kwargs): pass
 
 
-def generate_all_scenes(output_root: Path, codename: str, num_coach: int = 1) -> dict[str, Path]:
+def generate_all_scenes(
+    output_root: Path,
+    codename: str,
+    num_coach: int = 1,
+    preserve_existing: bool = False,
+) -> dict[str, Path]:
     """Generate the complete PC MainScene directory tree for a map.
 
     This is the main entry point for scene generation, equivalent to
@@ -577,17 +657,19 @@ def generate_all_scenes(output_root: Path, codename: str, num_coach: int = 1) ->
 
     paths = setup_dirs(output_root, codename)
 
-    write_audio_files(paths, codename)
-    write_cinematics_files(paths, codename)
-    write_graph_files(paths, codename)
-    write_timeline_isc(paths, codename)
-    write_videoscoach_files(paths, codename)
-    write_autodance_files(paths, codename)
-    write_menuart_isc(paths, codename, num_coach)
-    write_main_scene_isc(paths, codename)
+    write_audio_files(paths, codename, preserve_existing=preserve_existing)
+    write_cinematics_files(paths, codename, preserve_existing=preserve_existing)
+    write_graph_files(paths, codename, preserve_existing=preserve_existing)
+    write_timeline_isc(paths, codename, preserve_existing=preserve_existing)
+    write_videoscoach_files(paths, codename, preserve_existing=preserve_existing)
+    write_autodance_files(paths, codename, preserve_existing=preserve_existing)
+    write_menuart_isc(paths, codename, num_coach, preserve_existing=preserve_existing)
+    write_main_scene_isc(paths, codename, preserve_existing=preserve_existing)
 
     # Generate songdesc binary actor (songdesc.act.ckd)
-    write_songdesc_act_ckd(codename, paths["cache_root"] / "songdesc.act.ckd")
+    songdesc_act_path = paths["cache_root"] / "songdesc.act.ckd"
+    if not (preserve_existing and songdesc_act_path.exists()):
+        write_songdesc_act_ckd(codename, songdesc_act_path)
 
     logger.info("PC MainScene generation complete for '%s'", codename)
     return paths
