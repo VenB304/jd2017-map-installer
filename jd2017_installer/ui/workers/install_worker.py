@@ -15,7 +15,6 @@ from PyQt6.QtCore import QObject, QRunnable, pyqtSignal, pyqtSlot
 
 from jd2017_installer.core.config import AppConfig
 from jd2017_installer.core.exceptions import JDInstallerError
-from jd2017_installer.core.path_discovery import next_bundle_index
 from jd2017_installer.extractors.base import BaseExtractor, ExtractionProgress
 from jd2017_installer.installers.game_writer import generate_all_scenes
 from jd2017_installer.installers.ipk_packer import pack_folder_to_ipk
@@ -224,7 +223,7 @@ class InstallWorker(QObject):
 
             build_songdesc = paths["cache_root"] / "songdesc.tpl.ckd"
             build_songdesc.parent.mkdir(parents=True, exist_ok=True)
-            build_songdesc.write_text(json.dumps(sd_json, ensure_ascii=True), encoding="utf-8")
+            build_songdesc.write_text(json.dumps(sd_json, separators=(',', ':'), ensure_ascii=True), encoding="utf-8")
             
             # 2. Copy timeline and autodance from extracted based STRICTLY on guide.md
             self._log(logging.INFO, "Copying timeline and autodance based on guide.md...")
@@ -233,7 +232,7 @@ class InstallWorker(QObject):
             src_uncooked_world = extracted_path / "world" / "maps" / codename.lower()
             dst_uncooked_world = paths["world_root"]
             if (src_uncooked_world / "timeline").exists():
-                shutil.copytree(src_uncooked_world / "timeline", dst_uncooked_world / "timeline", dirs_exist_ok=True)
+                shutil.copytree(src_uncooked_world / "timeline", dst_uncooked_world / "timeline", dirs_exist_ok=True, ignore=shutil.ignore_patterns("durango", "*.gesture"))
             if (src_uncooked_world / "autodance").exists():
                 shutil.copytree(src_uncooked_world / "autodance", dst_uncooked_world / "autodance", dirs_exist_ok=True)
             
@@ -267,23 +266,26 @@ class InstallWorker(QObject):
             # 5. Convert any textures from Orbis/Switch to PC
             for root, _, files in os.walk(str(build_dir)):
                 for f in files:
-                    # Rename .png.ckd to .tga.ckd first
+                    # Rename .png.ckd to .tga.ckd first, EXCEPT for pictos
                     file_path = Path(root) / f
-                    if f.endswith(".png.ckd"):
+                    if f.endswith(".png.ckd") and "pictos" not in file_path.parts:
                         new_name = f.replace(".png.ckd", ".tga.ckd")
                         new_path = Path(root) / new_name
                         file_path.replace(new_path)
                         file_path = new_path
                         f = new_name
 
-                    # Convert .tga.ckd
-                    if f.endswith(".tga.ckd"):
+                    # Convert texture if it's .tga.ckd or .png.ckd
+                    if f.endswith(".tga.ckd") or f.endswith(".png.ckd"):
                         try:
                             data = file_path.read_bytes()
                             # Check if it needs conversion (i.e. not already standard DDS)
                             if len(data) > 44 and b"DDS " not in data[44:48]:
-                                new_data = convert_texture_lossless(data)
-                                file_path.write_bytes(new_data)
+                                new_data = convert_texture_lossless(data, file_path)
+                                if isinstance(new_data, str):
+                                    shutil.copy2(new_data, file_path)
+                                else:
+                                    file_path.write_bytes(new_data)
                         except TextureEncodingError as e:
                             self._log(logging.WARNING, f"Failed to convert texture {file_path.name}: {e}")
                         
@@ -479,7 +481,7 @@ class InstallWorker(QObject):
             if src_musictrack.exists():
                 dst_musictrack.parent.mkdir(parents=True, exist_ok=True)
                 mt_bytes = src_musictrack.read_bytes()
-                mt_bytes = mt_bytes.replace(b".wav", b".ogg").replace(b".WAV", b".ogg")
+                mt_bytes = mt_bytes.replace(b".wav", b".ogg").replace(b".WAV", b".ogg").strip(b"\x00")
                 dst_musictrack.write_bytes(mt_bytes)
                 self._log(logging.INFO, f"Copied and patched {src_musictrack.name} to .ogg")
             else:
@@ -504,16 +506,7 @@ class InstallWorker(QObject):
             
             # Phase 4: IPK Packing
             self._log(logging.INFO, "[Phase 4] Packing bundle IPK...")
-            existing_bundles = list(game_dir.glob("bundle_*_pc.ipk"))
-            max_num = 0
-            for b in existing_bundles:
-                try:
-                    num = int(b.name.split("_")[1])
-                    max_num = max(max_num, num)
-                except (ValueError, IndexError):
-                    pass
-            next_num = max_num + 1
-            bundle_name = f"bundle_{next_num}_pc.ipk"
+            bundle_name = f"{codename.lower()}_pc.ipk"
             bundle_path = game_dir / bundle_name
             
             self.signals.progress.emit("ipk_packing", 0, 1, f"Building {bundle_name}")

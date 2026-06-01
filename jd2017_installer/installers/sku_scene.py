@@ -29,7 +29,6 @@ _ACTOR_TEMPLATE = """\t\t<ACTORS NAME="Actor">
 # ISC files to patch
 _SKU_FILES = [
     "cache/itf_cooked/pc/world/skuscenes/skuscene_maps_pc_all.isc.ckd",
-    "cache/itf_cooked/pc/world/skuscenes/skuscene_maps_pc_ww.isc.ckd",
 ]
 
 
@@ -76,7 +75,7 @@ def _inject_actor_into_isc(isc_path: Path, codename: str) -> bool:
         
     if "<?xml" not in text:
         logger.info(f"File {isc_path.name} appears to be binary. Replacing with blank XML SkuScene.")
-        sku = "jd2017-pc-all" if "all" in isc_path.name.lower() else "jd2017-pc-ww"
+        sku = "jd2017-pc-ww"
         text = _BLANK_SKUSCENE_XML.format(sku=sku)
         isc_path.write_bytes(text.encode("utf-8"))
 
@@ -235,7 +234,7 @@ def patch_sku_scenes(game_dir: Path | str, codenames: list[str] | str) -> None:
             if not isc_path.exists():
                 logger.info("SKU file not found, creating new: %s", sku_rel_path)
                 isc_path.parent.mkdir(parents=True, exist_ok=True)
-                sku = "jd2017-pc-all" if "all" in isc_path.name.lower() else "jd2017-pc-ww"
+                sku = "jd2017-pc-ww"
                 isc_path.write_text(_BLANK_SKUSCENE_XML.format(sku=sku), encoding="utf-8")
                 
             for codename in codenames:

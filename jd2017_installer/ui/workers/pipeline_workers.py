@@ -2162,8 +2162,15 @@ def uninstall_map_from_game(
         from jd2017_installer.extractors.archive_ipk import inspect_ipk
         
         currently_registered = [m.lower() for m in list_registered_maps(normalized_game_dir)]
-        bundle_pattern = re.compile(r"^bundle_\d+_pc\.ipk$", re.IGNORECASE)
         
+        target_bundle = normalized_game_dir / f"{codename.lower()}_pc.ipk"
+        if target_bundle.exists() and target_bundle.is_file():
+            if status_callback:
+                status_callback(f"Removing map bundle: {target_bundle.name}")
+            target_bundle.unlink()
+            logger.info("Deleted map bundle IPK: %s", target_bundle.name)
+
+        bundle_pattern = re.compile(r"^bundle_\d+_pc\.ipk$", re.IGNORECASE)
         for bundle_file in normalized_game_dir.iterdir():
             if bundle_file.is_file() and bundle_pattern.match(bundle_file.name):
                 maps_in_ipk = [m.lower() for m in inspect_ipk(bundle_file)]
