@@ -10,6 +10,7 @@ import shutil
 import json
 from pathlib import Path
 from typing import Optional
+import re
 
 from PyQt6.QtCore import QObject, QRunnable, pyqtSignal, pyqtSlot
 
@@ -502,10 +503,27 @@ class InstallWorker(QObject):
             # 4. Modify musictrack `.wav` to `.ogg`
             src_musictrack = extracted_world / "audio" / f"{codename.lower()}_musictrack.tpl.ckd"
             dst_musictrack = paths["cache_audio"] / f"{codename.lower()}_musictrack.tpl.ckd"
+            a_offset = 0.0
             if src_musictrack.exists():
                 dst_musictrack.parent.mkdir(parents=True, exist_ok=True)
                 mt_bytes = src_musictrack.read_bytes()
                 mt_bytes = mt_bytes.replace(b".wav", b".ogg").replace(b".WAV", b".ogg")
+                
+                mt_text = mt_bytes.decode("utf-8", errors="ignore")
+                mt_text = mt_bytes.decode("utf-8", errors="ignore")
+                m = re.search(r'"videoStartTime"\s*:\s*([-\d.]+)', mt_text)
+                if m:
+                    a_offset = float(m.group(1)) - 0.085
+                    # DO NOT replace videoStartTime with 0.0! The JD2017 engine needs it to shift the tape/video.
+                else:
+                    jdlo_meta_path = extracted_path / "jdlo_metadata.json"
+                    if jdlo_meta_path.exists():
+                        try:
+                            jdlo_meta = json.loads(jdlo_meta_path.read_text(encoding="utf-8"))
+                            a_offset = jdlo_meta.get("delay", 0) / 1000.0
+                        except Exception:
+                            pass
+                        
                 dst_musictrack.write_bytes(mt_bytes)
                 self._log(logging.INFO, f"Copied and patched {src_musictrack.name} to .ogg")
             else:
@@ -519,10 +537,31 @@ class InstallWorker(QObject):
             ogg_candidates = list(extracted_path.rglob("*.ogg"))
             
             pref_audio = extracted_path / "world" / "maps" / codename.lower() / "audio" / f"{codename.lower()}.ogg"
+            if not pref_audio.exists() and ogg_candidates:
+                pref_audio = ogg_candidates[0]
+                
             if pref_audio.exists():
-                shutil.copy2(pref_audio, audio_dst)
-            elif ogg_candidates:
-                shutil.copy2(ogg_candidates[0], audio_dst)
+                from jd2017_installer.installers.media_processor import convert_audio, generate_intro_amb
+                self._log(logging.INFO, f"Converting/Trimming audio with offset {a_offset}s")
+                convert_audio(
+                    audio_path=pref_audio,
+                    map_name=codename.lower(),
+                    target_dir=paths["world_root"],
+                    a_offset=a_offset,
+                    config=self.config
+                )
+                try:
+                    self._log(logging.INFO, "Generating intro AMB...")
+                    generate_intro_amb(
+                        ogg_path=audio_dst,
+                        #ogg_path=pref_audio,
+                        map_name=codename,
+                        target_dir=paths["world_root"],
+                        a_offset=a_offset,
+                        config=self.config
+                    )
+                except Exception as e:
+                    self._log(logging.WARNING, f"Failed to generate intro AMB: {e}")
             else:
                 self._log(logging.WARNING, f"No .ogg audio file found in {extracted_path.name}")
                 
