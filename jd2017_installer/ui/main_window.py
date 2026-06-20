@@ -2379,7 +2379,7 @@ class MainWindow(QMainWindow):
             )
 
         from jd2017_installer.ui.workers.install_worker import InstallWorker
-        
+
         project_root = Path(__file__).resolve().parents[3]
         worker = InstallWorker(
             extractor=extractor,
@@ -2391,17 +2391,17 @@ class MainWindow(QMainWindow):
 
         # Wire signals
         thread.started.connect(worker.run)
-        
+
         # Adapt InstallWorker signals to JD2021 UI
         def on_progress(phase: str, current: int, total: int, detail: str) -> None:
             pct = int((current / max(1, total)) * 100)
             self._feedback_panel.set_progress(pct)
-            
+
         def on_log(level: int, msg: str) -> None:
             if level >= logging.ERROR:
                 self._feedback_panel.update_checklist_step("Extracting map data...", StepStatus.ERROR)
             self.append_log(msg)
-            
+
         def on_finished(success: bool, msg: str) -> None:
             self._lock_ui(False)
             self._stop_file_logging()

@@ -343,51 +343,47 @@ def generate_intro_amb(
 
     if not attempt_enabled:
         amb_dir.mkdir(parents=True, exist_ok=True)
-        intro_wavs = list(amb_dir.glob("*_intro.ogg"))
+        intro_wavs = list(amb_dir.glob("*_intro.wav"))
         if not intro_wavs:
-            intro_wavs = [amb_dir / f"amb_{map_lower}_intro.ogg"]
-        for ogg in intro_wavs:
-            _write_silent_ogg(ogg, config)
+            intro_wavs = [amb_dir / f"amb_{map_lower}_intro.wav"]
+        for wav in intro_wavs:
+            _write_silent_stereo_wav(wav)
         return
 
     if a_offset >= 0 and (v_override is None or v_override >= 0):
         if amb_dir.exists():
-            for ogg in amb_dir.glob("*_intro.ogg"):
-                _write_silent_ogg(ogg, config)
+            for wav in amb_dir.glob("*_intro.wav"):
+                _write_silent_stereo_wav(wav)
         return
 
     amb_dir.mkdir(parents=True, exist_ok=True)
 
-    intro_dur = abs(v_override) if v_override is not None and v_override < 0 else abs(a_offset)
-    source_preroll_dur = (marker_preroll_ms / 1000.0) if marker_preroll_ms is not None else abs(a_offset)
-    audio_delay = max(0.0, intro_dur - source_preroll_dur)
-    trim_front_s = 0.0
-    
+    # JD2017: the intro AMB covers exactly the marker preroll duration.
+    # No silence padding — the engine handles video/audio sync via videoStartTime.
     if marker_preroll_ms is not None:
         audio_content_dur = marker_preroll_ms / 1000.0
-        trim_front_s = max(0.0, source_preroll_dur - audio_content_dur)
     elif a_offset < 0:
-        target_window = abs(v_override) if v_override is not None and v_override < 0 else abs(a_offset)
-        audio_content_dur = target_window
-        trim_front_s = max(0.0, source_preroll_dur - target_window)
+        audio_content_dur = abs(a_offset)
     else:
-        audio_content_dur = abs(a_offset) + 1.355
+        audio_content_dur = abs(v_override) if v_override is not None and v_override < 0 else 1.0
+    trim_front_s = 0.0
+    audio_delay = 0.0
 
-    intro_oggs = list(amb_dir.glob("*_intro.ogg"))
     intro_tpls = list(amb_dir.glob("*_intro.tpl"))
+    intro_wavs = list(amb_dir.glob("*_intro.wav"))
 
     if intro_tpls:
         intro_name = intro_tpls[0].stem
-        intro_ogg = intro_oggs[0] if intro_oggs else amb_dir / f"{intro_name}.ogg"
+        intro_wav = intro_wavs[0] if intro_wavs else amb_dir / f"{intro_name}.wav"
     else:
-        if intro_oggs:
-            intro_ogg = intro_oggs[0]
-            intro_name = intro_ogg.stem
+        if intro_wavs:
+            intro_wav = intro_wavs[0]
+            intro_name = intro_wav.stem
         else:
             intro_name = f"amb_{map_lower}_intro"
-            intro_ogg = amb_dir / f"{intro_name}.ogg"
+            intro_wav = amb_dir / f"{intro_name}.wav"
 
-        wav_rel_path = f"world/maps/{map_lower}/audio/amb/{intro_ogg.name}"
+        wav_rel_path = f"world/maps/{map_lower}/audio/amb/{intro_name}.wav"
         ilu_content = f'''DESCRIPTOR =
 {{
 \t{{
@@ -396,7 +392,7 @@ def generate_intro_amb(
 \t\t{{
 \t\t\tname = "{intro_name}",
 \t\t\tvolume = 0,
-			category = "AMB",
+\t\t\tcategory = "AMB",
 \t\t\tlimitCategory = "",
 \t\t\tlimitMode = 0,
 \t\t\tmaxInstances = 4294967295,
@@ -463,9 +459,10 @@ includeReference("world/maps/{map_lower}/audio/amb/{intro_name}.ilu")'''
     ffmpeg_args += ["-t", f"{audio_content_dur:.3f}", "-i", str(ogg_path)]
     if af_filter:
         ffmpeg_args += ["-af", af_filter]
-    ffmpeg_args += ["-c:a", "libvorbis", "-q:a", "6", "-ar", "48000", str(intro_ogg)]
-    
-    _run_subprocess(ffmpeg_args, "Generate intro AMB OGG")
+    # Output as PCM WAV — JD2017 engine requires WAV for AMB sounds
+    ffmpeg_args += ["-c:a", "pcm_s16le", "-ar", "48000", "-ac", "2", str(intro_wav)]
+
+    _run_subprocess(ffmpeg_args, "Generate intro AMB WAV")
 
 def extract_amb_clips(
     cinematic_tape,
@@ -514,3 +511,95 @@ def extract_amb_clips(
         count += 1
 
     return count
+
+
+def copy_video(
+    src_path: str | Path,
+    dst_path: str | Path,
+    config=None,
+) -> Path:
+    """Copy a video file to the destination, creating dirs as needed."""
+    src = Path(src_path)
+    dst = Path(dst_path)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+
+    if not src.exists():
+        raise FileNotFoundError(f"Source video not found: {src}")
+
+    shutil.copy2(src, dst)
+    logger.debug("Copied video: %s -> %s", src.name, dst)
+    return dst
+
+
+def apply_audio_gain(
+    audio_path: str | Path,
+    gain_db: float,
+    config=None,
+) -> Path:
+    """Apply FFmpeg gain to a single audio file in-place."""
+    src = Path(audio_path)
+    if not src.exists():
+        raise FileNotFoundError(f"Audio file not found: {src}")
+
+    tmp = src.with_name(src.stem + ".gain_tmp" + src.suffix)
+    ffmpeg_path = getattr(config, "ffmpeg_path", "ffmpeg") if config else "ffmpeg"
+
+    _run_subprocess(
+        [ffmpeg_path, "-y", "-i", str(src), "-af", f"volume={gain_db}dB", str(tmp)],
+        "apply_audio_gain",
+    )
+
+    tmp.replace(src)
+    logger.debug("Applied %+0.1fdB gain: %s", gain_db, src.name)
+    return src
+
+
+def copy_moves(
+    moves_src_dir: str | Path,
+    target_dir: str | Path,
+    *,
+    skip_gestures: bool = False,
+) -> int:
+    """Copy move files from source to target directory."""
+    import os
+
+    src_root = Path(moves_src_dir)
+    if not src_root.is_dir():
+        return 0
+
+    moves_target_root = Path(target_dir) / "timeline" / "moves"
+    durango_moves_dir = moves_target_root / "durango"
+    pc_moves_dir = moves_target_root / "pc"
+    total_copied = 0
+
+    for plat_dir in src_root.iterdir():
+        if not plat_dir.is_dir():
+            continue
+
+        for move_file in plat_dir.rglob("*"):
+            if not move_file.is_file():
+                continue
+            ext_low = move_file.suffix.lower()
+            if ext_low not in (".gesture", ".msm"):
+                continue
+            if skip_gestures and ext_low == ".gesture":
+                continue
+
+            dest = durango_moves_dir / move_file.name
+            if not dest.exists():
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(move_file, dest)
+                total_copied += 1
+
+            if ext_low == ".gesture":
+                pc_dest = pc_moves_dir / move_file.name
+                if not pc_dest.exists():
+                    pc_dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(move_file, pc_dest)
+
+    return total_copied
+
+
+def process_menu_art(target_dir: str | Path, codename: str) -> int:
+    """Post-process menu art files (no-op placeholder for compatibility)."""
+    return 0

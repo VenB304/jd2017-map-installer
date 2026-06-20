@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Optional
 
 logger = logging.getLogger("jd2017.parsers.binary_ckd")
 
@@ -136,3 +136,20 @@ def is_xml_ckd(ckd_path: Path) -> bool:
         return stripped.startswith(b"<?xml") or stripped.startswith(b"<root")
     except Exception:
         return False
+
+
+def calculate_marker_preroll(markers: List[int], start_beat: int, include_calibration: bool = True) -> Optional[float]:
+    """Calculate pre-roll duration in ms from beat markers and start_beat.
+
+    start_beat (negative) indicates how many beats before beat-0 the audio begins.
+    Returns duration in milliseconds.
+
+    Note: Adds 85ms calibration only for OGG/Fetch maps (include_calibration=True).
+    """
+    idx = abs(start_beat)
+    if not markers or idx >= len(markers) or idx == 0:
+        return None
+    preroll_ms = (markers[idx] / 48.0)
+    if include_calibration:
+        preroll_ms += 85.0
+    return preroll_ms
