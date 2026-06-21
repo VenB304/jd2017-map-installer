@@ -304,14 +304,14 @@ def convert_audio(
         args = [ffmpeg_path, "-y", "-i", str(effective_audio)]
         
         if a_offset < 0:
-            trim_s = abs(a_offset)
-            args.extend(["-ss", f"{trim_s:.6f}", "-af", "volume=2.5,alimiter=limit=-0.1dB"])
+            trim_ms = int(round(abs(a_offset) * 1000))
+            args.extend(["-ss", f"{trim_ms}ms", "-af", "volume=2.5"])
         elif a_offset > 0:
             delay_ms = int(a_offset * 1000)
-            af_filter = f"adelay={delay_ms}|{delay_ms},asetpts=PTS-STARTPTS,volume=2.5,alimiter=limit=-0.1dB"
+            af_filter = f"adelay={delay_ms}|{delay_ms},asetpts=PTS-STARTPTS,volume=2.5"
             args.extend(["-af", af_filter])
         else:
-            args.extend(["-af", "volume=2.5,alimiter=limit=-0.1dB"])
+            args.extend(["-af", "volume=2.5"])
             
         args.extend(["-c:a", "libvorbis", "-q:a", "6", "-ar", "48000", str(ogg_out)])
         _run_subprocess(args, "convert_audio to ogg")
@@ -319,6 +319,82 @@ def convert_audio(
         if temp_dir.exists():
             import shutil
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+def encode_raki_wav_ckd(
+    wav_path: Path,
+    ckd_path: Path,
+    config=None,
+) -> None:
+    """Convert a PCM WAV to RAKI WAV.CKD (MS ADPCM) for the JD2017 engine.
+
+    The RAKI format is Ubisoft's cooked audio container used by UbiArt.
+    Structure: 56-byte RAKI header + WAVEFORMATEX + padding + MS ADPCM data.
+    """
+    import struct
+
+    ffmpeg_path = getattr(config, "ffmpeg_path", "ffmpeg") if config else "ffmpeg"
+    adpcm_wav = wav_path.with_suffix(".adpcm.wav")
+    try:
+        _run_subprocess([
+            ffmpeg_path, "-y", "-i", str(wav_path),
+            "-ar", "48000", "-ac", "2",
+            "-c:a", "adpcm_ms", "-block_size", "1024",
+            str(adpcm_wav),
+        ], "Encode MS ADPCM WAV")
+
+        data = adpcm_wav.read_bytes()
+        if data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+            raise ValueError("ffmpeg output is not a valid WAV file")
+
+        wfx_data = None
+        audio_data = None
+        pos = 12
+        while pos < len(data) - 8:
+            tag = data[pos:pos + 4]
+            size = struct.unpack_from("<I", data, pos + 4)[0]
+            if tag == b"fmt ":
+                wfx_data = data[pos + 8:pos + 8 + size]
+            elif tag == b"data":
+                audio_data = data[pos + 8:pos + 8 + size]
+            pos += 8 + size
+            if pos % 2 == 1:
+                pos += 1
+
+        if wfx_data is None or audio_data is None:
+            raise ValueError("WAV missing fmt or data chunk")
+
+        channels = struct.unpack_from("<H", wfx_data, 2)[0]
+        wfx_size = len(wfx_data)
+        fmt_end = 0x38 + wfx_size
+        audio_offset = (fmt_end + 15) & ~15  # align to 16 bytes
+        padding = audio_offset - fmt_end
+
+        raki = bytearray()
+        raki += b"RAKI"
+        raki += struct.pack("<I", 10)           # version
+        raki += b"Win "                         # platform
+        raki += b"adpc"                         # codec
+        raki += struct.pack("<I", fmt_end)      # fmt end offset
+        raki += struct.pack("<I", audio_offset) # audio data offset
+        raki += struct.pack("<I", channels)     # channels
+        raki += struct.pack("<I", 0)            # reserved
+        raki += b"fmt "
+        raki += struct.pack("<I", wfx_size + padding)  # fmt chunk size
+        raki += struct.pack("<I", wfx_size)     # WAVEFORMATEX size
+        raki += b"data"
+        raki += struct.pack("<I", audio_offset) # audio data offset
+        raki += struct.pack("<I", len(audio_data))
+        raki += wfx_data
+        raki += b"\x00" * padding
+        raki += audio_data
+
+        ckd_path.parent.mkdir(parents=True, exist_ok=True)
+        ckd_path.write_bytes(bytes(raki))
+        logger.info("Encoded RAKI WAV.CKD: %s (%d bytes)", ckd_path.name, len(raki))
+    finally:
+        if adpcm_wav.exists():
+            adpcm_wav.unlink()
+
 
 def generate_intro_amb(
     ogg_path: str | Path,
@@ -383,7 +459,7 @@ def generate_intro_amb(
             intro_name = f"amb_{map_lower}_intro"
             intro_wav = amb_dir / f"{intro_name}.wav"
 
-        wav_rel_path = f"world/maps/{map_lower}/audio/amb/{intro_name}.wav"
+        audio_rel_path = f"world/maps/{map_lower}/audio/amb/{intro_name}.wav"
         ilu_content = f'''DESCRIPTOR =
 {{
 \t{{
@@ -399,7 +475,7 @@ def generate_intro_amb(
 \t\t\tfiles =
 \t\t\t{{
 \t\t\t\t{{
-\t\t\t\t\tVAL = "{wav_rel_path}",
+\t\t\t\t\tVAL = "{audio_rel_path}",
 \t\t\t\t}},
 \t\t\t}},
 \t\t\tserialPlayingMode = 0,
@@ -449,17 +525,15 @@ includeReference("world/maps/{map_lower}/audio/amb/{intro_name}.ilu")'''
         (amb_dir / f"{intro_name}.ilu").write_text(ilu_content, encoding="utf-8")
         (amb_dir / f"{intro_name}.tpl").write_text(tpl_content, encoding="utf-8")
 
-    delay_ms = int(audio_delay * 1000)
-    af_filter = f"adelay={delay_ms}|{delay_ms},asetpts=PTS-STARTPTS" if delay_ms > 0 else ""
-
+    # Match Unity2UbiArt's approach: -i first, then -t after (output duration limit)
+    # Use milliseconds for precision, no audio filters (avoid limiter latency shift)
+    dur_ms = int(round(audio_content_dur * 1000))
     ffmpeg_path = getattr(config, "ffmpeg_path", "ffmpeg") if config else "ffmpeg"
-    ffmpeg_args = [ffmpeg_path, "-y"]
+    ffmpeg_args = [ffmpeg_path, "-y", "-i", str(ogg_path)]
     if trim_front_s > 0:
-        ffmpeg_args += ["-ss", f"{trim_front_s:.3f}"]
-    ffmpeg_args += ["-t", f"{audio_content_dur:.3f}", "-i", str(ogg_path)]
-    if af_filter:
-        ffmpeg_args += ["-af", af_filter]
-    # Output as PCM WAV — JD2017 engine requires WAV for AMB sounds
+        ffmpeg_args += ["-ss", f"{int(round(trim_front_s * 1000))}ms"]
+    ffmpeg_args += ["-t", f"{dur_ms}ms"]
+    ffmpeg_args += ["-af", "volume=2.5"]
     ffmpeg_args += ["-c:a", "pcm_s16le", "-ar", "48000", "-ac", "2", str(intro_wav)]
 
     _run_subprocess(ffmpeg_args, "Generate intro AMB WAV")

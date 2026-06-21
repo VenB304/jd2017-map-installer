@@ -39,3 +39,7 @@ temp/
 Things/
 updater_state.json
 installer_settings.json
+
+# Session/report docs (gitignored like jd2021-map-installer)
+docs/reports/
+docs/sessions/

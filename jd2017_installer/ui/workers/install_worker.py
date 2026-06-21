@@ -500,31 +500,20 @@ class InstallWorker(QObject):
                     except Exception as e:
                         self._log(logging.WARNING, f"Failed to patch dtape '{dtape_file.name}': {e}")
 
-            # 4. Modify musictrack `.wav` to `.ogg` and extract timing offsets
+            # 4. Copy musictrack (patch `.wav` refs to `.ogg`) and extract timing
             src_musictrack = extracted_world / "audio" / f"{codename.lower()}_musictrack.tpl.ckd"
             dst_musictrack = paths["cache_audio"] / f"{codename.lower()}_musictrack.tpl.ckd"
             a_offset = 0.0
-            v_override = None
-            marker_preroll_ms = None
+            start_beat = 0
             if src_musictrack.exists():
                 dst_musictrack.parent.mkdir(parents=True, exist_ok=True)
                 mt_bytes = src_musictrack.read_bytes()
                 mt_bytes = mt_bytes.replace(b".wav", b".ogg").replace(b".WAV", b".ogg")
 
                 mt_text = mt_bytes.decode("utf-8", errors="ignore")
-                m = re.search(r'"videoStartTime"\s*:\s*([-\d.]+)', mt_text)
-                if m:
-                    v_override = float(m.group(1))
-
-                # Parse startBeat and markers for precise offset calculation.
-                # These are nested deep in the CKD JSON:
-                # COMPONENTS[0].trackData.structure.{startBeat, markers}
-                start_beat = 0
-                markers = []
                 try:
                     decoder = json.JSONDecoder()
                     mt_json, _ = decoder.raw_decode(mt_text[mt_text.index('{'):])
-                    # Navigate to the MusicTrackStructure
                     structure = mt_json
                     for key in ("COMPONENTS", 0, "trackData", "structure"):
                         if isinstance(structure, list) and isinstance(key, int) and key < len(structure):
@@ -539,38 +528,14 @@ class InstallWorker(QObject):
                             for m in raw_markers
                         ]
                         self._log(logging.INFO, f"Parsed musictrack: startBeat={start_beat}, {len(markers)} markers")
+                        if markers and start_beat < 0:
+                            idx = abs(start_beat)
+                            if 0 < idx < len(markers):
+                                marker_preroll_ms = markers[idx] / 48.0
+                                a_offset = -(marker_preroll_ms / 1000.0)
+                                self._log(logging.INFO, f"Marker-based trim: {marker_preroll_ms:.1f}ms")
                 except Exception as e:
-                    self._log(logging.WARNING, f"JSON musictrack parse failed ({e}), falling back to regex")
-                    sb_match = re.search(r'"startBeat"\s*:\s*([-\d]+)', mt_text)
-                    start_beat = int(sb_match.group(1)) if sb_match else 0
-                    # Also try regex for markers as flat integers
-                    marker_section = re.search(r'"markers"\s*:\s*\[([\d,\s]+)\]', mt_text)
-                    if marker_section:
-                        markers = [int(v.strip()) for v in marker_section.group(1).split(',') if v.strip()]
-
-                if markers and start_beat < 0:
-                    # JD2017: no 85ms calibration (that's jd2021-specific OGG decode latency)
-                    idx = abs(start_beat)
-                    if idx < len(markers) and idx > 0:
-                        marker_preroll_ms = markers[idx] / 48.0
-                        a_offset = -(marker_preroll_ms / 1000.0)
-                        self._log(logging.INFO, f"Marker-based trim: {marker_preroll_ms:.1f}ms (markers[{idx}]={markers[idx]} samples)")
-
-                if a_offset == 0.0 and v_override is not None and v_override < 0:
-                    a_offset = v_override
-                    self._log(logging.INFO, f"Using videoStartTime as trim fallback: {a_offset}s")
-
-                if a_offset == 0.0:
-                    jdlo_meta_path = extracted_path / "jdlo_metadata.json"
-                    if jdlo_meta_path.exists():
-                        try:
-                            jdlo_meta = json.loads(jdlo_meta_path.read_text(encoding="utf-8"))
-                            delay_ms = jdlo_meta.get("delay", 0)
-                            if delay_ms:
-                                a_offset = -(delay_ms / 1000.0)
-                                self._log(logging.INFO, f"Using JDLO metadata delay as trim: {a_offset}s")
-                        except Exception:
-                            pass
+                    self._log(logging.WARNING, f"Musictrack parse failed: {e}")
 
                 dst_musictrack.write_bytes(mt_bytes)
                 self._log(logging.INFO, f"Copied and patched {src_musictrack.name} to .ogg")
@@ -589,11 +554,8 @@ class InstallWorker(QObject):
                 pref_audio = ogg_candidates[0]
 
             if pref_audio.exists():
-                from jd2017_installer.installers.media_processor import convert_audio, generate_intro_amb
-                # Trim preroll from audio so it starts at beat 0.
-                # The engine plays the file from the beginning at beat 0.
-                # The AMB intro WAV covers the preroll period separately.
-                self._log(logging.INFO, f"Converting audio with marker trim: a_offset={a_offset:.4f}s, v_override={v_override}")
+                from jd2017_installer.installers.media_processor import convert_audio, generate_intro_amb, encode_raki_wav_ckd
+                self._log(logging.INFO, f"Converting audio (a_offset={a_offset:.4f}s, startBeat={start_beat})")
                 convert_audio(
                     audio_path=pref_audio,
                     map_name=codename.lower(),
@@ -601,106 +563,97 @@ class InstallWorker(QObject):
                     a_offset=a_offset,
                     config=self.config
                 )
-                try:
-                    self._log(logging.INFO, f"Generating intro AMB WAV (a_offset={a_offset}, v_override={v_override}, preroll_ms={marker_preroll_ms})...")
-                    generate_intro_amb(
-                        ogg_path=pref_audio,
-                        map_name=codename,
-                        target_dir=paths["world_root"],
-                        a_offset=a_offset,
-                        v_override=v_override,
-                        marker_preroll_ms=marker_preroll_ms,
-                        config=self.config
-                    )
-                    # Copy AMB files to cache as CKDs (engine loads from cache, not world)
-                    amb_dir = paths["world_root"] / "audio" / "amb"
-                    if not amb_dir.exists():
-                        amb_dir = paths["world_root"] / "Audio" / "AMB"
-                    cache_amb = paths["cache_audio"] / "amb"
-                    cache_amb.mkdir(parents=True, exist_ok=True)
-                    amb_files = list(amb_dir.glob("*")) if amb_dir.exists() else []
-                    intro_name = f"amb_{codename.lower()}_intro"
 
-                    # Create self-contained .tpl.ckd (JSON CKD with embedded sound descriptor)
-                    wav_ref = f"world/maps/{codename.lower()}/audio/amb/{intro_name}.wav"
-                    amb_tpl_ckd = {
-                        "__class": "Actor_Template",
-                        "WIP": 0, "LOWUPDATE": 0, "UPDATE_LAYER": 0,
-                        "PROCEDURAL": 0, "STARTPAUSED": 0, "FORCEISENVIRONMENT": 0,
-                        "COMPONENTS": [{
-                            "__class": "SoundComponent_Template",
-                            "soundList": [{
-                                "__class": "SoundDescriptor_Template",
-                                "name": intro_name,
-                                "volume": 0,
-                                "category": "amb",
-                                "limitCategory": "",
-                                "limitMode": 0,
-                                "maxInstances": 4294967295,
-                                "files": [wav_ref],
-                                "serialPlayingMode": 0,
-                                "serialStoppingMode": 0,
-                                "params": {
-                                    "__class": "SoundParams",
-                                    "loop": 0,
-                                    "playMode": 1,
-                                    "playModeInput": "",
-                                    "randomVolMin": 0,
-                                    "randomVolMax": 0,
-                                    "delay": 0,
-                                    "randomDelay": 0,
-                                    "randomPitchMin": 1,
-                                    "randomPitchMax": 1,
-                                    "fadeInTime": 0,
-                                    "fadeOutTime": 0,
-                                    "filterFrequency": 0,
-                                    "filterType": 2,
-                                    "transitionSampleOffset": 0,
-                                },
-                                "pauseInsensitiveFlags": 0,
-                                "outDevices": 4294967295,
-                                "soundPlayAfterdestroy": 0,
-                            }]
-                        }]
-                    }
-                    (cache_amb / f"{intro_name}.tpl.ckd").write_text(
-                        json.dumps(amb_tpl_ckd, ensure_ascii=True), encoding="utf-8"
-                    )
+                # Generate AMB intro (preroll audio before beat 0)
+                if a_offset < 0:
+                    try:
+                        marker_preroll_ms = abs(a_offset) * 1000.0
+                        self._log(logging.INFO, f"Generating intro AMB ({marker_preroll_ms:.1f}ms preroll)...")
+                        generate_intro_amb(
+                            ogg_path=pref_audio,
+                            map_name=codename,
+                            target_dir=paths["world_root"],
+                            a_offset=a_offset,
+                            v_override=None,
+                            marker_preroll_ms=marker_preroll_ms,
+                            config=self.config
+                        )
 
-                    # Copy WAV to cache with CKD header (44-byte null prefix)
-                    intro_wav = amb_dir / f"{intro_name}.wav"
-                    if intro_wav.exists():
-                        wav_data = intro_wav.read_bytes()
-                        (cache_amb / f"{intro_name}.wav.ckd").write_bytes(b"\x00" * 44 + wav_data)
-
-                    self._log(logging.INFO, f"AMB cache CKDs created: {[f.name for f in cache_amb.glob('*')]}")
-                except Exception as e:
-                    import traceback
-                    self._log(logging.WARNING, f"Failed to generate intro AMB: {e}\n{traceback.format_exc()}")
-
-                # Inject SoundSetClip into the COOKED tape (.tape.ckd in cache).
-                # The engine loads the cooked CKD, not the uncooked .tape.
-                try:
-                    import zlib
-                    tape_ckd_path = paths["cache_cinematics"] / f"{codename.lower()}_mainsequence.tape.ckd"
-                    if tape_ckd_path.exists():
-                        tape_text = tape_ckd_path.read_text(encoding="utf-8", errors="replace")
-                        decoder = json.JSONDecoder()
-                        tape_json, _ = decoder.raw_decode(tape_text[tape_text.index('{'):])
-
-                        # Find AMB intro TPL name
                         amb_dir = paths["world_root"] / "audio" / "amb"
                         if not amb_dir.exists():
                             amb_dir = paths["world_root"] / "Audio" / "AMB"
-                        intro_tpls = list(amb_dir.glob("*_intro.tpl")) if amb_dir.exists() else []
+                        cache_amb = paths["cache_audio"] / "amb"
+                        cache_amb.mkdir(parents=True, exist_ok=True)
+                        cn_lower = codename.lower()
+                        intro_name = f"amb_{cn_lower}_intro"
 
-                        if intro_tpls:
-                            intro_tpl_name = intro_tpls[0].name
-                            soundset_path = f"world/maps/{codename.lower()}/audio/amb/{intro_tpl_name}"
-                            track_id = zlib.crc32(intro_tpl_name.lower().encode("utf-8")) & 0xFFFFFFFF
-                            clip_id = zlib.crc32(f"{codename.lower()}:{intro_tpl_name.lower()}:intro".encode("utf-8")) & 0xFFFFFFFF
+                        # Encode WAV to RAKI WAV.CKD
+                        intro_wav = amb_dir / f"{intro_name}.wav"
+                        if intro_wav.exists():
+                            ckd_path = cache_amb / f"{intro_name}.wav.ckd"
+                            encode_raki_wav_ckd(intro_wav, ckd_path, config=self.config)
+                            self._log(logging.INFO, f"Encoded RAKI: {ckd_path.name}")
 
-                            # Compute clip timing from markers
+                        # Create self-contained .tpl.ckd (matches Sasha's format)
+                        wav_ref = f"world/maps/{cn_lower}/audio/amb/{intro_name}.wav"
+                        amb_tpl_ckd = {
+                            "__class": "Actor_Template",
+                            "WIP": 0, "LOWUPDATE": 0, "UPDATE_LAYER": 0,
+                            "PROCEDURAL": 0, "STARTPAUSED": 0, "FORCEISENVIRONMENT": 0,
+                            "COMPONENTS": [{
+                                "__class": "SoundComponent_Template",
+                                "soundList": [{
+                                    "__class": "SoundDescriptor_Template",
+                                    "name": intro_name,
+                                    "volume": -8,
+                                    "category": "amb",
+                                    "limitCategory": "",
+                                    "limitMode": 0,
+                                    "maxInstances": 4294967295,
+                                    "files": [wav_ref],
+                                    "serialPlayingMode": 0,
+                                    "serialStoppingMode": 0,
+                                    "params": {
+                                        "__class": "SoundParams",
+                                        "loop": 0,
+                                        "playMode": 1,
+                                        "playModeInput": "",
+                                        "randomVolMin": 0,
+                                        "randomVolMax": 0,
+                                        "delay": 0,
+                                        "randomDelay": 0,
+                                        "pitch": 1,
+                                        "randomPitchMin": 1,
+                                        "randomPitchMax": 1,
+                                        "fadeInTime": 0,
+                                        "fadeOutTime": 0,
+                                        "filterFrequency": 0,
+                                        "filterType": 2,
+                                        "transitionSampleOffset": 0,
+                                    },
+                                    "pauseInsensitiveFlags": 0,
+                                    "outDevices": 4294967295,
+                                    "soundPlayAfterdestroy": 0,
+                                }]
+                            }]
+                        }
+                        tpl_ckd_name = f"set_{intro_name}.tpl.ckd"
+                        (cache_amb / tpl_ckd_name).write_text(
+                            json.dumps(amb_tpl_ckd, ensure_ascii=True), encoding="utf-8"
+                        )
+
+                        # Inject SoundSetClip into the cooked tape
+                        import zlib
+                        tape_ckd_path = paths["cache_cinematics"] / f"{cn_lower}_mainsequence.tape.ckd"
+                        if tape_ckd_path.exists():
+                            tape_text = tape_ckd_path.read_text(encoding="utf-8", errors="replace")
+                            decoder = json.JSONDecoder()
+                            tape_json, _ = decoder.raw_decode(tape_text[tape_text.index('{'):])
+
+                            soundset_path = f"world/maps/{cn_lower}/audio/amb/set_{intro_name}.tpl"
+                            track_id = zlib.crc32(f"set_{intro_name}.tpl".lower().encode("utf-8")) & 0xFFFFFFFF
+                            clip_id = zlib.crc32(f"{cn_lower}:set_{intro_name}:intro".encode("utf-8")) & 0xFFFFFFFF
+
                             clip_start = start_beat * 24 if start_beat < 0 else -192
                             clip_dur = abs(clip_start)
 
@@ -719,7 +672,6 @@ class InstallWorker(QObject):
                             }
 
                             clips = tape_json.get("Clips", [])
-                            # Remove any existing intro clip
                             clips = [c for c in clips if not (
                                 isinstance(c, dict) and "intro" in str(c.get("SoundSetPath", "")).lower()
                             )]
@@ -727,14 +679,12 @@ class InstallWorker(QObject):
                             tape_json["Clips"] = clips
 
                             tape_ckd_path.write_text(json.dumps(tape_json, ensure_ascii=True), encoding="utf-8")
-                            self._log(logging.INFO, f"Injected SoundSetClip into cooked tape: StartTime={clip_start}, Duration={clip_dur}, path={soundset_path}")
-                        else:
-                            self._log(logging.WARNING, "No AMB intro TPL found, skipping SoundSetClip injection")
-                    else:
-                        self._log(logging.WARNING, f"Cooked tape not found at {tape_ckd_path}")
-                except Exception as e:
-                    import traceback
-                    self._log(logging.WARNING, f"Failed to inject SoundSetClip into cooked tape: {e}\n{traceback.format_exc()}")
+                            self._log(logging.INFO, f"Injected SoundSetClip: StartTime={clip_start}, Duration={clip_dur}")
+
+                        self._log(logging.INFO, f"AMB intro created: {[f.name for f in cache_amb.glob('*')]}")
+                    except Exception as e:
+                        import traceback
+                        self._log(logging.WARNING, f"AMB intro generation failed: {e}\n{traceback.format_exc()}")
             else:
                 self._log(logging.WARNING, f"No .ogg audio file found in {extracted_path.name}")
                 
